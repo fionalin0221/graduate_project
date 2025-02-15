@@ -8,6 +8,7 @@ import matplotlib.path as mpath
 import yaml
 import cv2
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def Ray_Segment(point, s_point, e_point):
     if s_point[1] == e_point[1]:
@@ -55,7 +56,7 @@ def check_patch_condition(image_path):
     if img is None:
         return 1
     end_read_img = time.time()
-    print(f"read img time: {end_read_img-start_read_img}")
+    # print(f"read img time: {end_read_img-start_read_img}")
 
     start_color_mean = time.time()
     blue_mean = np.mean(img[:, :, 2])
@@ -63,14 +64,14 @@ def check_patch_condition(image_path):
     if blue_mean <= 200 and red_mean <= 180:
         return 1
     end_color_mean = time.time()
-    print(f"count color mean time: {end_color_mean-start_color_mean}")
+    # print(f"count color mean time: {end_color_mean-start_color_mean}")
 
     start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if np.mean(gray_image) >= 230:  #white
         return 1
     end_mean_pixel = time.time()
-    print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")
+    # print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")
 
     start_black_time = time.time()
     color = ('b','g','r')
@@ -82,12 +83,33 @@ def check_patch_condition(image_path):
     if int(b == g == r == 0) == 1:
         return 1
     end_black_time = time.time()
-    print(f"end black time: {end_black_time-start_black_time}")
+    # print(f"end black time: {end_black_time-start_black_time}")
     return 0
 
-config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config.yml')
+def process_image(f, patches_path, all_region, classes):
+
+    if check_patch_condition(f"{patches_path}/{f}") == 1:
+        return None
+
+    fx, fy = f.split('_')
+    fy = fy[:-4]
+    left_up = [int(fx), int(fy)]
+    right_up = [int(fx) + 448, int(fy)]
+    left_down = [int(fx), int(fy) + 448]
+    right_down = [int(fx) + 448, int(fy) + 448]
+
+    for k, v in all_region.items():
+        if k[0] in classes:
+            region = np.array(v)
+            if all(Point_in_Region(pt, region) for pt in [left_up, right_up, left_down, right_down]):
+                return f, k[0]
+
+    return None
+
+config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config_data.yml')
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
+
 current_computer = config['current_computer']
 type = config['type']
 file_paths = config['computers'][current_computer]['file_paths']
@@ -95,7 +117,7 @@ class_list = config["class_list"]
 classes = [class_list[i] for i in file_paths['classes']]
 print(classes)
 
-wsis = file_paths['HCC_wsis'] if config['type'] == "HCC" else file_paths['CC_wsis']
+wsis = file_paths[f'{type}_wsis']
 for wsi in wsis:
     print(f'{type} WSI : ', wsi)
     if type == "HCC":
@@ -104,7 +126,6 @@ for wsi in wsis:
     elif type == "CC":
         xml_name = "LIVER_1{:04d}.xml".format(wsi)
         tree = ET.parse(os.path.join(file_paths['CC_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
-    print(xml_name)
     root = tree.getroot()
 
     all_region = {}
@@ -121,43 +142,25 @@ for wsi in wsis:
         csv_dir = os.path.join(file_paths['HCC_csv_dir'],f"{wsi+91}")
     elif type == "CC":
         csv_dir = os.path.join(file_paths['CC_csv_dir'],f"{wsi}")
-    if not os.path.exists(csv_dir):
-        os.makedirs(csv_dir)
+    os.makedirs(csv_dir, exist_ok=True)
 
-    data_info = {}
-    data_info['file_name'] = []
-    data_info['label'] = []
+    data_info = {"file_name": [], "label": []}
     nums = [0] * len(classes)
 
-    patches_path = os.path.join(file_paths['HCC_patches_save_path'],f"{wsi}") if type == "HCC" else os.path.join(file_paths['CC_patches_save_path'],f"{wsi}")
-    dir = os.listdir(patches_path)
+    patches_path = os.path.join(file_paths[f'{type}_patches_save_path'],f"{wsi}")
+    dir_files = os.listdir(patches_path)
 
-    for f in tqdm(dir, leave=False):
-        start_cv2_time = time.time()
-        if check_patch_condition(f"{patches_path}/{f}") == 1:
-            continue
-        end_cv2_time = time.time()
-        print(f"judge patch time: {end_cv2_time-start_cv2_time}")
-        start_point_in_region_time = time.time()
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_image, f, patches_path, all_region, classes): f for f in dir_files}
+        
+        for future in tqdm(as_completed(futures), total=len(dir_files), desc="Processing images", leave=False):
+            result = future.result()
+            if result is not None:
+                filename, label = result
+                data_info['file_name'].append(filename)
+                data_info['label'].append(label)
+                nums[classes.index(label)] += 1
 
-        fx , fy = f.split('_')
-        fy = fy[:-4]
-        left_up = [int(fx), int(fy)]
-        right_up = [int(fx) + 448, int(fy)]
-        left_down = [int(fx), int(fy) + 448]
-        right_down = [int(fx) + 448, int(fy) + 448]
-
-        for k, v in all_region.items():
-            if k[0] in classes:
-                region = np.array(v)
-                if ((Point_in_Region(left_up, region)==True) and (Point_in_Region(right_up, region)==True) 
-                    and (Point_in_Region(left_down, region)==True) and (Point_in_Region(right_down, region)==True)):
-                    data_info['file_name'].append(f)
-                    data_info['label'].append(k[0])
-
-                    nums[classes.index(k[0])] += 1
-        end_point_in_region_time = time.time()
-        print(f"Point in Region judge time: {end_point_in_region_time-start_point_in_region_time}")
 
     df = pd.DataFrame(data_info)
     if type == "HCC":

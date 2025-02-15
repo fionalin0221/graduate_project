@@ -37,7 +37,7 @@ def find_contours_of_connected_components(label, sorted_pts, area_thresh):
         cate_pts = sorted_pts[sorted_pts[:, 2] == 0]
     if label == 'N':
         cate_pts = sorted_pts[sorted_pts[:, 2] == 1]
-    if label == 'F':
+    if label == 'C':
         cate_pts = sorted_pts[sorted_pts[:, 2] == 2]
 
     for pts in cate_pts:
@@ -110,7 +110,7 @@ def ND_zscore_filter(contour_df, weight):
 
     return contour_df_copy
 
-def find_contours(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selected_patches):
+def find_contour(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selected_patches):
     patches_in_hulls = []
     tp_in_regions, fp_in_regions = {}, {}
     patches_in_regions = {}
@@ -138,8 +138,8 @@ def find_contours(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, sele
         ### Check pts in every HCC region or not ###
         for idx, region in enumerate(regions):
             if ((Point_in_Region(left_up, region)==True)):
-                if (formatted_filename in all_patches) and (formatted_filename not in selected_patches['filename']):
-                    selected_patches['filename'].append(formatted_filename)
+                if (formatted_filename in all_patches) and (formatted_filename not in selected_patches['file_name']):
+                    selected_patches['file_name'].append(formatted_filename)
                     selected_patches['label'].append(cl)
 
                     if idx not in patches_in_regions.keys():
@@ -161,4 +161,60 @@ def find_contours(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, sele
                 if formatted_filename not in patches_in_hulls:
                     patches_in_hulls.append(formatted_filename)
 
-        return selected_patches, patches_in_regions, tp_in_regions, fp_in_regions
+    return selected_patches, patches_in_regions, tp_in_regions, fp_in_regions
+
+def zscore_filter(tp_in_cancer_regions, fp_in_cancer_regions, tn_in_norm_regions, fn_in_norm_regions, patches_in_cancer_regions, patches_in_norm_regions, cl):
+    pos_num, neg_num = 0,0
+    positive_cases = {"contour_key": [], "number": [], "density": []}
+    for key in tp_in_cancer_regions.keys():
+        num = tp_in_cancer_regions[key] + fp_in_cancer_regions[key]
+        den = tp_in_cancer_regions[key] / (tp_in_cancer_regions[key] + fp_in_cancer_regions[key])
+        positive_cases["contour_key"].append(key)
+        positive_cases["number"].append(num)
+        positive_cases["density"].append(den)
+        pos_num += num
+    pos_df = pd.DataFrame(positive_cases)
+
+    negative_cases = {"contour_key": [], "number": [], "density": []}
+    for key in tn_in_norm_regions.keys():
+        num = tn_in_norm_regions[key] + fn_in_norm_regions[key]
+        den = tn_in_norm_regions[key] / (tn_in_norm_regions[key] + fn_in_norm_regions[key])
+        negative_cases["contour_key"].append(key)
+        negative_cases["number"].append(num)
+        negative_cases["density"].append(den)
+        neg_num += num
+    neg_df = pd.DataFrame(negative_cases)
+
+    # num_filter_pos_df = pos_df[pos_df["number"] >= num_thresh]
+    # num_filter_neg_df = neg_df[neg_df["number"] >= num_thresh]
+
+    ideal_patches = {'file_name': [], 'label': []}
+    
+    if pos_num >0:
+        pl_cancer_contour_df = ND_zscore_filter(contour_df=pos_df, weight=[1, 1])  # z-score
+        # pl_cancer_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tpfp_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        # Filter keys where the sum of z-scores is greater than or equal to 0
+        pl_cancer_filtered_keys = pl_cancer_contour_df[pl_cancer_contour_df['zscore_sum'] >= 0]['contour_key'].to_list()
+        for pl_cancer_key in pl_cancer_filtered_keys:
+            ideal_patches['file_name'].extend(patches_in_cancer_regions[pl_cancer_key])
+            ideal_patches['label'].extend([cl] * len(patches_in_cancer_regions[pl_cancer_key]))
+
+    else:
+        pl_cancer_contour_df = pos_df
+        # pl_cancer_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tpfp_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        print('NO cancer')
+
+    if neg_num >0:
+        pl_norm_contour_df = ND_zscore_filter(contour_df=neg_df, weight=[1, 1])
+        # pl_norm_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tnfn_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        pl_norm_filtered_keys = pl_norm_contour_df[pl_norm_contour_df['zscore_sum'] >= 0]['contour_key'].to_list()
+        for pl_norm_key in pl_norm_filtered_keys:
+            ideal_patches['file_name'].extend(patches_in_norm_regions[pl_norm_key])
+            ideal_patches['label'].extend(['N'] * len(patches_in_norm_regions[pl_norm_key]))
+
+    else:
+        pl_norm_contour_df=neg_df
+        # pl_norm_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tnfn_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        print('NO Normal')
+
+    return ideal_patches, pl_cancer_contour_df, pl_norm_contour_df

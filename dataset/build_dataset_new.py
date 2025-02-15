@@ -6,6 +6,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import cv2
 import yaml
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 def check_patch_condition(image_path):
     start_read_img = time.time()
@@ -43,14 +45,13 @@ def check_patch_condition(image_path):
     # print(f"end black time: {end_black_time-start_black_time}")
     return 0
 
-def devide_into_dataset(all_data, valid_num, test_num):
-    valid_set = random.sample(all_data, valid_num)
-    all_data = [d for d in all_data if d not in valid_set]
-    test_set = random.sample(all_data, test_num)
-    train_set = [d for d in all_data if d not in test_set]
-    return {'train_set': train_set, 'valid_set': valid_set, 'test_set': test_set}
+def process_files(file_list, folder):
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(tqdm(executor.map(check_patch_condition, [os.path.join(folder, f) for f in file_list]), 
+                            total=len(file_list), desc="Processing patches", leave=False))
+    return [result for result in results if result is not None]
 
-config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config.yml')
+config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config_data.yml')
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 current_computer = config['current_computer']
@@ -71,45 +72,26 @@ for wsi in wsis:
     print(f"{type} WSI-{wsi}")
     if not os.path.exists(os.path.join(csv_dir, str(wsi))):
         os.makedirs(os.path.join(csv_dir, str(wsi)))
-
-    file_names = []
-    labels  = []
     
     if type == "HCC" and state == "old":
-        Filter_Region = {"file_name": [], "label": []}
+        
         cancer_patch_path = f"{file_paths['old_patches_save_path']}/{wsi}/HCC"
         normal_patch_path = f"{file_paths['old_patches_save_path']}/{wsi}/Normal"
-        cancer_file_names = os.listdir(cancer_patch_path)
-        normal_file_names = os.listdir(normal_patch_path)
-        for idx, file_name in enumerate(tqdm(cancer_file_names)):
-            if file_name[-4:] == ".tif":
-                if check_patch_condition(f"{cancer_patch_path}/{file_name}") == 0:
-                    file_names.append(file_name)
-                    labels.append(classes[1])
-                    Filter_Region["file_name"].append(file_name)
-                    # Filter_Region["label"].append(classes[1])
 
-        for idx, file_name in enumerate(tqdm(normal_file_names)):
-            if file_name[-4:] == ".tif":
-                if check_patch_condition(f"{normal_patch_path}/{file_name}") == 0:
-                    file_names.append(file_name)
-                    labels.append(classes[0])
-                    Filter_Region["file_name"].append(file_name)
-                    # Filter_Region["label"].append(classes[0])
+        cancer_file_names = [f for f in os.listdir(cancer_patch_path) if f.endswith(".tif")]
+        normal_file_names = [f for f in os.listdir(normal_patch_path) if f.endswith(".tif")]
+
+        cancer_tissue_files = process_files(cancer_file_names, cancer_patch_path)
+        normal_tissue_files = process_files(normal_file_names, normal_patch_path)
+        
+        Filter_Region = {cancer_tissue_files + normal_tissue_files}
+
     else:
-        Filter_Region = {"file_name": []}
         all_patch_path = f"{file_paths[f'{type}_patches_save_path']}/{wsi}"
-        all_file_names = os.listdir(all_patch_path)
-        for idx, file_name in enumerate(tqdm(all_file_names)):
-            if file_name[-4:] == ".tif":
-                if check_patch_condition(f"{all_patch_path}/{file_name}") == 0:
-                    file_names.append(file_name)
-                    # labels.append(all_labels[idx])
-                    Filter_Region["file_name"].append(file_name)
-                    # Filter_Region["label"].append(all_labels[idx])
-    
-    file_names = np.array(file_names)
-    # labels = np.array(labels)
+        all_file_names = [f for f in os.listdir(all_patch_path) if f.endswith(".tif")]
+
+        tissue_files = process_files(all_file_names, all_patch_path)
+        Filter_Region = {"file_name": tissue_files}
 
     save_file_name = (
         f"{wsi}/{wsi}_all_patches_filter_v2.csv" if (type == "HCC" and state == "old")

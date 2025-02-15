@@ -1,5 +1,5 @@
 # The path can also be read from a config file, etc.
-OPENSLIDE_PATH = r'C:/openslide-bin-4.0.0.4-windows-x64/bin'
+# OPENSLIDE_PATH = r'C:/openslide-bin-4.0.0.4-windows-x64/bin'
 
 import os
 from PIL import Image
@@ -10,22 +10,27 @@ import cv2
 import traceback
 import yaml
 
+config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config_data.yml')
+with open(config_path, 'r') as file:
+    config = yaml.safe_load(file)
+current_computer = config['current_computer']
+type = config['type']
+state = config['state']
+file_paths = config['computers'][current_computer]['file_paths']
+
+if type == "HCC":
+    ndpi_path = file_paths[f'{type}_{state}_ndpi_path']
+else:
+    ndpi_path = file_paths[f'{type}_ndpi_path']
+wsis =  file_paths[f'{type}_wsis']
+
+OPENSLIDE_PATH = file_paths['OPENSLIDE_PATH']
 if hasattr(os, 'add_dll_directory'):
     # Python >= 3.8 on Windows
     with os.add_dll_directory(OPENSLIDE_PATH):
         import openslide
 else:
     import openslide
-
-config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config.yml')
-with open(config_path, 'r') as file:
-    config = yaml.safe_load(file)
-current_computer = config['current_computer']
-type = config['type']
-file_paths = config['computers'][current_computer]['type'][type]['file_paths']
-
-ndpi_path = file_paths['ndpi_path']
-wsis =  file_paths['wsis']
 
 for wsi in wsis:
     try:
@@ -39,9 +44,15 @@ for wsi in wsis:
         p_w = wsi_openslide.dimensions[0] // 448 + 1
         p_h = wsi_openslide.dimensions[1] // 448 + 1
         
-        patches_save_path = os.path.join(file_paths['patches_save_path'], f"{wsi}")
+        if type == "HCC":
+            patches_save_path = os.path.join(file_paths[f'{type}_{state}_patches_save_path'], f"{wsi}")
+        else:
+            patches_save_path = os.path.join(file_paths[f'{type}_patches_save_path'], f"{wsi}")
+
         if not os.path.exists(patches_save_path):
             os.makedirs(patches_save_path)
+
+        print(patches_save_path)
 
         for height in tqdm(range(0, p_h*448, 448)):
             for width in range(0, p_w*448, 448):
@@ -49,7 +60,7 @@ for wsi in wsis:
 
                 im = Image.fromarray(img)
                 im = im.convert('RGB')
-                im.save(f"{patches_save_path}\{width}_{height}.tif", dpi=(100, 100))
+                im.save(f"{patches_save_path}/{width}_{height}.tif", dpi=(100, 100))
         wsi_openslide.close()
         
         end = time.time()
