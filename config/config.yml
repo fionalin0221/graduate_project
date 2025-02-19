@@ -89,16 +89,23 @@ computers:
     docker:
         file_paths:
             OPENSLIDE_PATH: "/workspace/openslide"
-            100WTC_model_path: "/workspace/Data/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
-            40WTC_model_path: "/workspace/Data/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
+            HCC_100WTC_model_path: "/workspace/Data/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
+            HCC_40WTC_model_path: "/workspace/Data/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
+            CC_40WTC_model_path: "/workspace/Data/Results/CC_NDPI/40WTC_Result"
+            CC_10WTC_model_path: "/workspace/Data/Results/CC_NDPI/10WTC_Result"
             # use in 100WTC new HCC_wsis: [1, 6, 8, 9, 13, 16, 27, 29, 30]
             HCC_wsis: []
             # HCC_wsis: [19, 21, 24, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
             # == 110, 112, 115, 122, 127, 129, 130, 135, 136, 138, 139, 140, 141, 142, 144
-            CC_wsis: [1 ,2, 3, 6, 7, 8, 11, 12, 13, 14, 25, 26, 27, 28, 39, 40, 41, 42, 43, 52, 53, 54, 55, 67, 69, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96]
-            # CC_wsis: [215, 217,222, 223, 224, 225, 226, 241, 242, 243]
-            # CC_wsis: [97, 98, 99, 100, 108, 109, 110, 111, 116, 118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138]
+            CC_wsis: [1 ,2, 3, 6, 7, 8, 11, 12, 13, 14, 25, 26, 27, 28, 39, 40, 41, 42, 43, 52, 53, 54, 55, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 108, 109, 110, 111, 116] # 67, 69, 70, 71, 72
+            # CC_wsis: [215, 217, 222] #215, 217, 222, 223, 224, 225, 226, 241, 242, 243]
+            # CC_wsis: [118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138] #108, 109, 110, 111, 116, 
             classes : [0, 2]
+
+            # trainer
+            num_trial : 1
+            data_num : 2560
+            num_wsi: 1
             
             # dataset
             HCC_old_ndpi_path: "/workspace/Data/ndpi/Old_HCC_WSI_rawdata"
@@ -112,10 +119,7 @@ computers:
             CC_patches_save_path: "/workspace/Data/Datas/CC_Patch"
             CC_csv_dir : "/workspace/Data/Results/CC_NDPI/Data_Info"
             CC_generation_save_path: "/workspace/Data/Results/CC_NDPI/Generation_Training"
-            
-            # trainer
-            num_trial : 2
-            data_num : 2560
+        
             
             # HCC_2_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/2_class_WTC"
             # HCC_3_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/3_class_WTC"

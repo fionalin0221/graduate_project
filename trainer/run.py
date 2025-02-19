@@ -9,17 +9,19 @@ def main():
         config = yaml.safe_load(file)
     current_computer = config['current_computer']
     file_paths = config['computers'][current_computer]['file_paths']
-    wsis = file_paths['HCC_wsis']
+    type = config['type']
+    wsis = file_paths[f'{type}_wsis']
 
     worker = Worker(config)
     # worker.train()
     # worker.train_multi_model()
     # worker.train_generation()
-    worker.test()
+    # worker.test()
     # worker.contour_analysis_multi(0, )
-    # for wsi in wsis:
-        # worker.test_TATI(wsi, 0, save_path = None)
-        # worker.plot_TI_Result(wsi, 0, save_path = None)
+    for wsi in wsis:
+        worker.train_one_WSI(wsi)
+        worker.test_TATI(wsi, 0, save_path = None)
+        worker.plot_TI_Result(wsi, 0, save_path = None)
         # worker.contour_analysis(wsi, 0, save_path = None)
 
 
