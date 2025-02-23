@@ -900,12 +900,13 @@ class Worker():
                 model = self.EfficientNetWithLinear(output_dim = 2)
 
         else:
-            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             if self.test_model == "self":
+                condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
                 save_path = save_dir
             else:
-                save_dir = os.path.jion(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
+                condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+                save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
                 save_path = f"{save_dir}/{_wsi}" 
 
             modelName = f"{condition}_Model.ckpt"
@@ -940,7 +941,8 @@ class Worker():
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(f'{self.cc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
         
-        self._test(test_dataset, data_info_df, model, save_path, condition, "TI")
+        _condition = f'{_wsi}_{condition}'
+        self._test(test_dataset, data_info_df, model, save_path, _condition, "TI")
 
     def plot_confusion_matrix(self, cm, save_path, condition, title='Confusion Matrix'):
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -977,11 +979,11 @@ class Worker():
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             if self.test_model == "self":
-                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{wsi}"
                 save_path = save_dir
             else:
-                save_dir = os.path.jion(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
-                save_path = f"{save_dir}/{_wsi}" 
+                save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
+                save_path = f"{save_dir}/{__wsi}" 
 
         df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
         # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
@@ -1047,7 +1049,7 @@ class Worker():
         plt.tight_layout()
         plt.axis("off")
 
-        _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
+        # _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
         plt.savefig(f"{save_path}/Metric/{wsi}_pred_vs_gt.png")
         print(f"WSI {wsi} already plot the pred_vs_gt image")
         # plt.show()
