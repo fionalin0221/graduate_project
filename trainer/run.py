@@ -20,6 +20,7 @@ def main():
     # worker.contour_analysis_multi(0, )
     for wsi in wsis:
         worker.train_one_WSI(wsi)
+        worker.test_one_WSI(wsi)
         worker.test_TATI(wsi, 0, save_path = None)
         worker.plot_TI_Result(wsi, 0, save_path = None)
         # worker.contour_analysis(wsi, 0, save_path = None)

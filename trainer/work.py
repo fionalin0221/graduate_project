@@ -49,6 +49,7 @@ class Worker():
         self.data_num = self.file_paths['data_num']
         self.num_trial = self.file_paths['num_trial']   
         self.num_wsi = self.file_paths['num_wsi']
+        self.test_model = self.file_paths['test_model']
 
         if self.gen_type:
             self.save_dir = self.file_paths[f'{self.type}_generation_save_path']
@@ -570,12 +571,15 @@ class Worker():
                 break
 
     def train_one_WSI(self, wsi):
-        condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-        if self.type == "HCC":
-            save_path = f"{self.save_path}/{wsi}/trial_{self.num_trial}"
+        if self.state == "old":
+            _wsi = wsi
+        elif self.type == "HCC":
+            _wsi = wsi + 91
         elif self.type == "CC":
-            save_path = f"{self.save_path}/{wsi}/trial_{self.num_trial}"
+            _wsi = f"1{wsi:04d}"
 
+        save_path = f"{self.save_path}/{wsi}/trial_{self.num_trial}"
+        condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
         print(f"WSI {wsi} | {condition}")
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
@@ -585,18 +589,24 @@ class Worker():
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
         # train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
+        train_data, valid_data = [], []
         if self.state == "old":
             data_dir = f'{self.hcc_old_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
+            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         elif self.type == "HCC":
             data_dir = f'{self.hcc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
+            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         elif self.type == "CC":
             data_dir = f'{self.cc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
+            selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         Train, Valid, _ = self.split_datas(selected_data, self.data_num)
         train_dataset = self.TrainDataset(Train, data_dir, self.classes, self.train_tfm, state = self.state)
         valid_dataset = self.TrainDataset(Valid, data_dir, self.classes, self.train_tfm, state = self.state)
+        train_data.extend(pd.DataFrame(Train).to_dict(orient='records'))
+        valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
+
+        pd.DataFrame(train_data).to_csv(f"{save_path}/Data/{condition}_train.csv", index=False)
+        pd.DataFrame(valid_data).to_csv(f"{save_path}/Data/{condition}_valid.csv", index=False)
         print(f"training data number: {len(train_dataset)}, validation data number: {len(valid_dataset)}")
 
         train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
@@ -711,7 +721,7 @@ class Worker():
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
-    def _test(self, test_dataset, model, save_path, condition):
+    def _test(self, test_dataset, data_info_df, model, save_path, condition, test_type):
         # Record Information
         Predictions = {"file_name": []}
         for class_name in self.classes:
@@ -733,23 +743,24 @@ class Worker():
                     Predictions[f"{class_name}_pred"].extend(preds.cpu().numpy()[:, idx])
 
         pred_df = pd.DataFrame(Predictions)
-        pred_df.to_csv(f"{save_path}/Metric/{condition}_pred_score.csv")
+        if test_type == "Metric":
+            pred_df.to_csv(f"{save_path}/Metric/{condition}_pred_score.csv")
+        elif test_type == "TI":
+            pred_df.to_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
 
         # pred_df = pd.read_csv(f"{save_path}/Metric/{condition}_pred_score.csv")
+        # pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
 
-        data_info_df = pd.read_csv(f"{save_path}/Data/{condition}_test.csv")
-
+        results_df = {"file_name":[]}
         all_labels, all_preds = [], []
         match_df  = data_info_df[data_info_df['file_name'].isin(pred_df['file_name'])]
-        
-        print(len(pred_df), len(data_info_df), len(match_df))
 
         filename_inRegion = match_df['file_name'].to_list()
         label_inRegion = match_df['label'].to_list()
 
         for idx, filename in enumerate(tqdm(filename_inRegion)):
             label = self.classes.index(label_inRegion[idx])
-
+            results_df["file_name"].append(filename)
             row = pred_df[pred_df['file_name'] == filename]
             preds = []
             for cl in self.classes:
@@ -758,7 +769,16 @@ class Worker():
 
             all_labels.append(label)
             all_preds.append(pred)
-        
+
+        text_labels = [self.classes[label] for label in all_labels]
+        text_preds = [self.classes[pred] for pred in all_preds]
+
+        results_df["true_label"] = text_labels
+        results_df["pred_label"] = text_preds
+
+        # Save to CSV
+        pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv", index=False)
+
         acc = accuracy_score(all_labels, all_preds)
         print("Accuracy: {:.4f}".format(acc))
 
@@ -783,11 +803,13 @@ class Worker():
         
     def test_one_WSI(self, wsi):
         if self.type == "HCC":
-            condition = f"{self.hcc_wsis[0]}_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_path = f"{self.save_path}/{self.hcc_wsis[0]}/trial_{self.num_trial}"
+            _wsi = wsi + 91
+            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            save_path = f"{self.save_path}/{_wsi}/trial_{self.num_trial}"
         elif self.type == "CC":
-            condition = f"{self.cc_wsis[0]}_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_path = f"{self.save_path}/{self.cc_wsis[0]}/trial_{self.num_trial}"
+            _wsi = f"1{wsi:04d}"
+            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            save_path = f"{self.save_path}/{wsi}/trial_{self.num_trial}"
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -796,17 +818,24 @@ class Worker():
         os.makedirs(f"{save_path}/Data", exist_ok=True)
         
         # _, _, test_dataset = self.prepare_dataset(f"{save_path}/Data", condition, 0, "test")
+        test_data = []
         if self.state == "old":
-            data_dir = f'{self.hcc_old_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
+            _wsi = wsi
+            data_dir = f'{self.hcc_old_data_dir}/{_wsi}'
+            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         elif self.type == "HCC":
+            _wsi = wsi + 91
             data_dir = f'{self.hcc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
+            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         elif self.type == "CC":
+            _wsi = f"1{wsi:04d}"
             data_dir = f'{self.cc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
+            selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+        
         _, _, Test = self.split_datas(selected_data, self.data_num)
-        test_dataset = self.TestDataset(Test, data_dir, self.classes, self.test_tfm, state = self.state)
+        test_dataset = self.TestDataset(data_dir, Test, self.classes, self.test_tfm, state = self.state, label_exist=False)
+        test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
+        pd.DataFrame(test_data).to_csv(f"{save_path}/Data/{condition}_test.csv", index=False)
 
         print(f"testing data number: {len(test_dataset)}")
         
@@ -818,7 +847,9 @@ class Worker():
         model.load_state_dict(torch.load(model_path))
         model.to(device)
 
-        self._test(test_dataset, model, save_path, condition)
+        data_info_df = pd.read_csv(f"{save_path}/Data/{condition}_test.csv")
+
+        self._test(test_dataset, data_info_df, model, save_path, condition, "Metric")
     
     def test(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -841,12 +872,20 @@ class Worker():
         model.load_state_dict(torch.load(model_path))
         model.to(device)
 
-        self._test(test_dataset, model, save_path, condition)
+        data_info_df = pd.read_csv(f"{save_path}/Data/{condition}_test.csv")
+
+        self._test(test_dataset, data_info_df, model, save_path, condition, "Metric")
 
     def test_TATI(self, wsi, gen, save_path):
         ### Multi-WTC Evaluation ###
         if save_path == None:
-            _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
+            if self.state == "old":
+                _wsi = wsi
+            elif self.type == "HCC":
+                _wsi = wsi + 91
+            elif self.type == "CC":
+                _wsi = f"1{wsi:04d}"
+                
         if self.gen_type:
             save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
             if gen == 0:
@@ -861,9 +900,14 @@ class Worker():
                 model = self.EfficientNetWithLinear(output_dim = 2)
 
         else:
-            condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'], f"LP_{self.data_num}/trial_{self.num_trial}") 
-            save_path = f"{save_dir}/{_wsi}" 
+            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            if self.test_model == "self":
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+                save_path = save_dir
+            else:
+                save_dir = os.path.jion(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
+                save_path = f"{save_dir}/{_wsi}" 
+
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
             model = self.EfficientNetWithLinear(output_dim = 2)
@@ -882,103 +926,21 @@ class Worker():
         model.to(device)
         Sigmoid = nn.Sigmoid()
 
-        # Record Information
-        Predictions = {"file_name": []}
-        for cl in self.classes:
-            Predictions[f"{cl}_pred"] = []
-
         # Dataset, Evaluation, Inference
         if self.state == "old":
             _wsi = wsi
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_all_patches_filter_v2.csv')
-            test_set = self.TestDataset(f'{self.hcc_old_data_dir}/{wsi}', data_info_df, self.classes, self.test_tfm, state='old', label_exist=False)
+            test_dataset = self.TestDataset(f'{self.hcc_old_data_dir}/{wsi}', data_info_df, self.classes, self.test_tfm, state='old', label_exist=False)
         elif self.type == "HCC":
             _wsi = wsi + 91
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_set = self.TestDataset(f'{self.hcc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(f'{self.hcc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
         else:
             _wsi = f'1{wsi:04d}'
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_set = self.TestDataset(f'{self.cc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(f'{self.cc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
         
-        test_loader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0, pin_memory=True)
-        
-        model.eval()
-        with torch.no_grad():
-            for batch in tqdm(test_loader):
-                imgs, fname = batch
-                logits = model(imgs.to(device))
-                preds = Sigmoid(logits)
-                
-                # Inference
-                Predictions["file_name"].extend(fname)
-                Predictions[f"{self.classes[0]}_pred"].extend(preds.cpu().numpy()[:, 0])
-                Predictions[f"{self.classes[1]}_pred"].extend(preds.cpu().numpy()[:, 1])
-
-        pd.DataFrame(Predictions).to_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
-        
-        pred_df = pd.DataFrame(Predictions)
-
-        # pred_df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
-        
-        filename_inRegion = data_info_df['file_name'].to_list()
-        label_inRegion = data_info_df['label'].to_list()
-
-        results_df = {"file_name":[]}
-
-        all_labels, all_preds = [], []
-        not_found = 0
-        for idx, filename in enumerate(tqdm(filename_inRegion)):
-            label = self.classes.index(label_inRegion[idx])  # N=0, H=1
-            # print(label_inRegion[idx], label)
-            
-            row = pred_df[pred_df['file_name'] == filename]
-            if not row.empty:
-                results_df["file_name"].append(filename)
-                preds = []
-                for cl in self.classes:
-                    preds.append(row[f'{cl}_pred'].values[0]) # N, H
-                pred = np.argmax(preds)
-                # pred = self.classes.index(row['label'].values[0])
-                all_labels.append(label)
-                all_preds.append(pred)
-            else:
-                not_found += 1
-                continue
-
-        text_labels = [self.classes[label] for label in all_labels]
-        text_preds = [self.classes[pred] for pred in all_preds]
-
-        results_df["true_label"] = text_labels
-        results_df["pred_label"] = text_preds
-
-        # Save to CSV
-        pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{_wsi}_{condition}_labels_predictions.csv", index=False)
-
-        cm = confusion_matrix(all_labels, all_preds)    #[[TP, FN], [FP, TN]]
-
-        acc = accuracy_score(all_labels, all_preds)
-        print("Accuracy: {:.4f}".format(acc))
-        
-        Eval_Metric = {
-            "WSI": [wsi],
-            "Accuracy": [acc]}
-
-        for i, class_name in enumerate(self.classes):
-            TP = cm[i, i]  # True Positives for class i
-            FN = cm[i, :].sum() - TP  # False Negatives for class i
-            FP = cm[:, i].sum() - TP  # False Positives for class i
-            TN = cm.sum() - (TP + FP + FN) # True Negatives for class i
-
-            Eval_Metric[f"{class_name}_TP"] = [TP]
-            Eval_Metric[f"{class_name}_FN"] = [FN]
-            Eval_Metric[f"{class_name}_TN"] = [TN]
-            Eval_Metric[f"{class_name}_FP"] = [FP]
-
-        # Save to CSV
-        pd.DataFrame(Eval_Metric).to_csv(f"{save_path}/Metric/{_wsi}_{condition}_metric.csv", index=False)
-
-        self.plot_confusion_matrix(cm, save_path, f"{_wsi}_{condition}", title=f'Confusion Matrix of WSI-{_wsi}')
+        self._test(test_dataset, data_info_df, model, save_path, condition, "TI")
 
     def plot_confusion_matrix(self, cm, save_path, condition, title='Confusion Matrix'):
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -1014,8 +976,12 @@ class Worker():
                 condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'], f"LP_{self.data_num}/trial_{self.num_trial}") 
-            save_path = f"{save_dir}/{_wsi}" 
+            if self.test_model == "self":
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+                save_path = save_dir
+            else:
+                save_dir = os.path.jion(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
+                save_path = f"{save_dir}/{_wsi}" 
 
         df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
         # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
@@ -1083,6 +1049,7 @@ class Worker():
 
         _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
         plt.savefig(f"{save_path}/Metric/{wsi}_pred_vs_gt.png")
+        print(f"WSI {wsi} already plot the pred_vs_gt image")
         # plt.show()
 
     def plot_TI_Result_gt_boundary(self, wsi, gen, save_path):
