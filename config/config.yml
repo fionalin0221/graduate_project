@@ -2,90 +2,10 @@ current_computer : "docker"
 type: "CC"
 class_list: ["N", "H", "C"]
 state: "new"
-generation: 5
+generation: 0
 gen_type: False
 
 computers:
-    computer_1:
-        name: "IPMC-L"                 
-        file_paths:
-            100WTC_model_path: "F:/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
-            40WTC_model_path: "F:/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
-            # HCC_wsis: [1, 6, 8, 9, 13, 16, 19, 27, 29, 30]
-            HCC_wsis: [38]
-            # CC_wsis: [1 ,2, 3, 6, 7, 8, 11, 53, 54, 55]
-            CC_wsis: []
-            classes : [0, 1]
-            
-            # dataset
-            HCC_ndpi_path : "F:/Results/HCC_NDPI/HCC_label"
-            HCC_patches_save_path: "F:/Datas/Patch"
-            HCC_old_patches_save_path: "F:/Datas/HCC_Old_Patch/Unbalanced"
-            HCC_csv_dir : "F:/Results/HCC_NDPI/Data_Info"
-            HCC_generation_save_path: "F:/Results/HCC_NDPI/Generation_Training"
-            
-            CC_ndpi_path : "F:/Results/HCC_NDPI/CC_label"
-            CC_patches_save_path: "F:/Datas/CC_Patch"
-            CC_csv_dir : "F:/Results/CC_NDPI/Data_Info"
-            CC_generation_save_path: "F:/Results/CC_NDPI/Generation_Training"
-            
-            # trainer
-            num_trial : 1
-            data_num : 160
-            
-            # HCC_2_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/2_class_WTC"
-            # HCC_3_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/3_class_WTC"
-            HCC_WTC_result_save_path: "F:/Results/HCC_NDPI"
-            HCC_pseudo_result_save_path: "F:/Results/HCC_NDPI/Generation_Training"
-            
-            # CC_2_class_1WTC_result_save_path: "F:/Results/CC_NDPI/2_class_WTC"
-            # CC_3_class_1WTC_result_save_path: "F:/Results/CC_NDPI/3_class_WTC"
-            CC_WTC_result_save_path: "F:/Results/CC_NDPI"
-            CC_pseudo_result_save_path: "F:/Results/CC_NDPI/Generation_Training"
-
-            Mix_multi_WTC_result_save_path: "F:/Results/Mix_NDPI"
-            generation_save_path: "F:/Results/Mix_NDPI"
-
-    computer_2:
-        name: "DeskTop-LG"
-        file_paths:
-            100WTC_model_path: "E:/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
-            40WTC_model_path: "E:/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
-            # use in 100WTC new HCC_wsis: [1, 6, 8, 9, 13, 16, 27, 29, 30]
-            HCC_wsis: [19] # 19, 21, 24, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53
-            # CC_wsis: [1 ,2, 3, 6, 7, 8, 11, 53, 54, 55]
-            CC_wsis: []
-            classes : [0, 1]
-            
-            # dataset
-            HCC_ndpi_path : "E:/Results/HCC_NDPI/HCC_label"
-            HCC_patches_save_path: "E:/Datas/Patch"
-            HCC_old_patches_save_path: "E:/Datas/HCC_Old_Patch/Unbalanced"
-            HCC_csv_dir : "E:/Results/HCC_NDPI/Data_Info"
-            HCC_generation_save_path: "E:/Results/HCC_NDPI/Generation_Training"
-            
-            CC_ndpi_path : "E:/Results/HCC_NDPI/CC_label"
-            CC_patches_save_path: "E:/Datas/CC_Patch"
-            CC_csv_dir : "E:/Results/CC_NDPI/Data_Info"
-            CC_generation_save_path: "E:/Results/CC_NDPI/Generation_Training"
-            
-            # trainer
-            num_trial : 1
-            data_num : 160
-            
-            # HCC_2_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/2_class_WTC"
-            # HCC_3_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/3_class_WTC"
-            HCC_WTC_result_save_path: "E:/Results/HCC_NDPI"
-            HCC_pseudo_result_save_path: "E:/Results/HCC_NDPI/Generation_Training"
-            
-            # CC_2_class_1WTC_result_save_path: "F:/Results/CC_NDPI/2_class_WTC"
-            # CC_3_class_1WTC_result_save_path: "F:/Results/CC_NDPI/3_class_WTC"
-            CC_WTC_result_save_path: "E:/Results/CC_NDPI"
-            CC_pseudo_result_save_path: "E:/Results/CC_NDPI/Generation_Training"
-
-            Mix_multi_WTC_result_save_path: "E:/Results/Mix_NDPI"
-            generation_save_path: "E:/Results/Mix_NDPI"
-
     docker:
         file_paths:
             OPENSLIDE_PATH: "/workspace/openslide"
@@ -98,14 +18,15 @@ computers:
             HCC_wsis: []
             # HCC_wsis: [19, 21, 24, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
             # == 110, 112, 115, 122, 127, 129, 130, 135, 136, 138, 139, 140, 141, 142, 144
-            CC_wsis: [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 25, 26, 27, 28, 39, 40, 41, 42, 43, 52, 53, 54, 55, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 108, 109, 110, 111, 116] # 67, 69, 70, 71, 72
-            # CC_wsis: [215, 217, 222] #215, 217, 222, 223, 224, 225, 226, 241, 242, 243]
-            # CC_wsis: [118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138] #108, 109, 110, 111, 116,
+            CC_wsis: [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 39, 40, 41, 42, 52, 53, 54, 55, 69, 70, 71, 72, 73, 91, 100, 108, 111, 116, 122, 123, 124, 130, 131, 134, 136, 137, 138, 143, 144, 147] # 145, 146, 148, 158, 163, 164, 169]
+            # Too less CC WSI: 25, 26, 27, 28, 43,  67, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 109, 110, 118, 135, 149, 157, 167, 168
+            # all Normal: 73, 147, 145
+            # CC_wsis: [215, 217, 222, 223, 224, 225, 226, 241, 242, 243]
             # CC_wsis: [143, 144, 145, 146, 147, 148, 149, 157, 158, 163, 164, 165, 167, 168, 169, 170, 171, 173, 174, 175, 176, 177, 178, 179, 180, 183, 184, 185, 190, 191, 192, 193, 201, 202, 203, 204, 206, 207, 208] 
             classes : [0, 2]
 
             # trainer
-            num_trial : 1
+            num_trial : 3
             data_num : 2560
             num_wsi: 40
             

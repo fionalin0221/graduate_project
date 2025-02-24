@@ -58,12 +58,12 @@ def check_patch_condition(image_path):
     end_read_img = time.time()
     # print(f"read img time: {end_read_img-start_read_img}")
 
-    start_color_mean = time.time()
-    blue_mean = np.mean(img[:, :, 2])
-    red_mean = np.mean(img[:, :, 0])
-    if blue_mean <= 200 and red_mean <= 180:
-        return 1
-    end_color_mean = time.time()
+    # start_color_mean = time.time()
+    # blue_mean = np.mean(img[:, :, 2])
+    # red_mean = np.mean(img[:, :, 0])
+    # if blue_mean <= 200 and red_mean <= 180:
+    #     return 1
+    # end_color_mean = time.time()
     # print(f"count color mean time: {end_color_mean-start_color_mean}")
 
     start_mean_pixel = time.time()
