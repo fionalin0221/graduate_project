@@ -180,10 +180,8 @@ class Worker():
             data_num = int(data_num)
             for num in range(len(self.classes)):
                 if len(class_file_names[num]) > 0:
-                    if len(class_file_names[num]) < data_num:
-                        datas.append(class_file_names[num])
-                    else:
-                        datas.append(random.sample(class_file_names[num], data_num))
+                    class_data_num = int(data_num * 0.9) if num == 0 else int(data_num * 0.1)
+                    datas.append(random.sample(class_file_names[num], class_data_num))
                     # if self.type == "Mix" and self.classes[num] == "N":
                     #     datas.append(random.sample(class_file_names[num], int(data_num/2)))
                     # else:
@@ -427,8 +425,8 @@ class Worker():
         plt.savefig(f"{save_path}/loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
     
     def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class):
-        n_epochs = 100
-        min_epoch = 5
+        n_epochs = 20
+        min_epoch = 20
         notImprove = 0
         min_loss = 1000.
 
@@ -624,6 +622,7 @@ class Worker():
     def train(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
         save_path = f"{self.save_path}/trial_{self.num_trial}"
+        print(f"Trial {self.num_trial}")
         print(f"WSI number: {self.num_wsi}")
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
@@ -906,7 +905,7 @@ class Worker():
                 save_path = save_dir
             else:
                 condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-                save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{_wsi}" 
 
             modelName = f"{condition}_Model.ckpt"
@@ -982,7 +981,7 @@ class Worker():
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{wsi}"
                 save_path = save_dir
             else:
-                save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'],f"LP_{self.data_num}/trial_{self.num_trial}")
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{__wsi}" 
 
         df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
