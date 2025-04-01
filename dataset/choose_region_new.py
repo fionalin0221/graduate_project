@@ -148,6 +148,9 @@ for wsi in wsis:
     nums = [0] * len(classes)
 
     patches_path = os.path.join(file_paths[f'{type}_patches_save_path'],f"{wsi}")
+    if not os.path.exists(patches_path):
+        print(f"Skipping: {patches_path} not found")
+        continue
     dir_files = os.listdir(patches_path)
 
     with ThreadPoolExecutor(max_workers=8) as executor:

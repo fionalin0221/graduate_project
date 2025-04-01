@@ -180,7 +180,7 @@ class Worker():
             data_num = int(data_num)
             for num in range(len(self.classes)):
                 if len(class_file_names[num]) > 0:
-                    class_data_num = int(data_num * 0.9) if num == 0 else int(data_num * 0.1)
+                    class_data_num = int(data_num * 0.5) if num == 0 else int(data_num * 0.5)
                     datas.append(random.sample(class_file_names[num], class_data_num))
                     # if self.type == "Mix" and self.classes[num] == "N":
                     #     datas.append(random.sample(class_file_names[num], int(data_num/2)))
@@ -280,6 +280,7 @@ class Worker():
             test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
         for c_wsi in self.cc_wsis:
+            print(c_wsi)
             if self.gen_type:
                 selected_data = pd.read_csv(f'{save_path}/1{c_wsi:04d}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
             else:
