@@ -9,7 +9,7 @@ output_file = "WSI_patches.csv"  # Output file
 results = []
 
 # Loop through directories
-for num in range(1, 250):  # Adjust range if needed
+for num in range(250, 400):  # Adjust range if needed
     dir_path = os.path.join(base_dir, str(num))  # Directory path
     file_name = f"1{num:04d}_patch_in_region_filter_2_v2.csv"
     file_path = os.path.join(dir_path, file_name)

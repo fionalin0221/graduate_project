@@ -280,7 +280,6 @@ class Worker():
             test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
         for c_wsi in self.cc_wsis:
-            print(c_wsi)
             if self.gen_type:
                 selected_data = pd.read_csv(f'{save_path}/1{c_wsi:04d}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
             else:
@@ -426,8 +425,8 @@ class Worker():
         plt.savefig(f"{save_path}/loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
     
     def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class):
-        n_epochs = 20
-        min_epoch = 20
+        n_epochs = 2
+        min_epoch = 2
         notImprove = 0
         min_loss = 1000.
 
@@ -436,7 +435,7 @@ class Worker():
         valid_loss_list = []
         valid_acc_list = []
 
-        log_file = f"{loss_save_path}/{condition}_log.yaml"
+        log_file = f"{loss_save_path}/{condition}_log_fintune.yaml"
 
         for epoch in range(1, n_epochs):
             # ---------- Training ----------
@@ -553,7 +552,7 @@ class Worker():
                 "valid_acc": valid_acc_list
             })
 
-            training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
+            training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log_fintune.csv", index=False)
 
             if valid_avg_loss < min_loss:
                 # Save model if your model improved
@@ -644,10 +643,15 @@ class Worker():
 
         # plt.imshow(img_grid.permute(1, 2, 0))
         # plt.show()
+        
+        # modelName = f"{condition}_Model_40.ckpt"
+        modelName = f"{condition}_Model_40_fintune.ckpt"
+        model_path = f"{save_path}/Model/{modelName}"
 
         model = self.EfficientNetWithLinear(output_dim=self.class_num)
+        model.load_state_dict(torch.load(model_path))
         model.to(device)
-        modelName = f"{condition}_Model.ckpt"
+        
         
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
@@ -909,7 +913,7 @@ class Worker():
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{_wsi}" 
 
-            modelName = f"{condition}_Model.ckpt"
+            modelName = f"{condition}_Model_10.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
             model = self.EfficientNetWithLinear(output_dim = 2)
 
@@ -941,7 +945,7 @@ class Worker():
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(f'{self.cc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
         
-        _condition = f'{_wsi}_{condition}'
+        _condition = f'{_wsi}_Model_10_{condition}'
         self._test(test_dataset, data_info_df, model, save_path, _condition, "TI")
 
     def plot_confusion_matrix(self, cm, save_path, condition, title='Confusion Matrix'):
@@ -984,8 +988,9 @@ class Worker():
             else:
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{__wsi}" 
-
-        df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
+        
+        _condition = f'{__wsi}_Model_10_{condition}'
+        df = pd.read_csv(f"{save_path}/Metric/{_condition}_labels_predictions.csv")
         # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
         
         all_patches = df['file_name'].to_list() #patches_in_hcc_hulls
@@ -1050,7 +1055,7 @@ class Worker():
         plt.axis("off")
 
         # _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
-        plt.savefig(f"{save_path}/Metric/{wsi}_pred_vs_gt.png")
+        plt.savefig(f"{save_path}/Metric/{_condition}_pred_vs_gt.png")
         print(f"WSI {wsi} already plot the pred_vs_gt image")
         # plt.show()
 
