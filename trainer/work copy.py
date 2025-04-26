@@ -116,39 +116,46 @@ class Worker():
             return len(self.data_dict["file_name"])
     
     class TestDataset(Dataset):
-        def __init__(self, data_dict, img_dir, classes, transform, state, label_exist=True):
+        def __init__(self, data_dir, data_dict, classes, transform, state, label_exist=True):
             
-            self.data_dict = data_dict
-            self.img_dir = img_dir
+            self.data_dir = data_dir
             self.classes = classes
             self.transform = transform
             self.label_exist = label_exist
+            self.data_dict = data_dict
+
+            # if self.label_exist:
+            self.label = self.data_dict['label']
+            self.filename = self.data_dict['file_name']
             self.state = state
             
+            
         def __getitem__(self, index):
-            label_text = self.data_dict["label"][index]
+            label_text = self.label[index]
             label = self.classes.index(label_text)
-
-            img_name = self.data_dict["file_name"][index]
+        
             if self.state == 'old':
-                if label_text == 'H':
-                    image_path = os.path.join(self.img_dir, 'HCC', img_name)
-                if label_text == 'N':
-                    image_path = os.path.join(self.img_dir, 'Normal', img_name)
+                if label == 'H':
+                    image_path = os.path.join(self.data_dir, 'HCC', self.filename[index])
+                if label == 'N':
+                    image_path = os.path.join(self.data_dir, 'Normal', self.filename[index])
+                image = Image.open(image_path)
+                image = self.transform(image)
 
             if self.state == 'new':
-                image_path = os.path.join(self.img_dir, img_name)
+                image_path = os.path.join(self.data_dir, self.filename[index])
+                image = Image.open(image_path)
+                image = self.transform(image)
 
-            image = Image.open(image_path)
-            image = self.transform(image)
-
+            
             if self.label_exist:
-                return image, label, img_name
+                return image, label, self.filename[index]
+            
             else:
-                return image, img_name
+                return image, self.filename[index]
         
         def __len__(self):
-            return len(self.data_dict["file_name"])
+            return len(self.filename)
         
     def check_overlap(self, *lists):
         sets = [set(lst) for lst in lists]
@@ -177,7 +184,7 @@ class Worker():
             data_num = int(data_num)
             for num in range(len(self.classes)):
                 if len(class_file_names[num]) > 0:
-                    class_data_num = int(data_num * 0.25) if num == 0 else int(data_num * 0.5)
+                    class_data_num = int(data_num * 0.5) if num == 0 else int(data_num * 0.5)
                     datas.append(random.sample(class_file_names[num], class_data_num))
                     # if self.type == "Mix" and self.classes[num] == "N":
                     #     datas.append(random.sample(class_file_names[num], int(data_num/2)))
@@ -186,9 +193,9 @@ class Worker():
                 else:
                     datas.append([])
                 
-        # if self.check_overlap(*datas):
-        #     print(f'Data overlap.')
-        #     return
+        if self.check_overlap(*datas):
+            print(f'Data overlap.')
+            return
 
         data_file_names, data_labels = [], []
 
@@ -254,7 +261,7 @@ class Worker():
             Train, Valid, Test = self.split_datas(selected_data, self.data_num)
             h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
             h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
-            h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
+            h_test_dataset  = self.TestDataset(f'{self.hcc_old_data_dir}/{h_wsi}',Test, self.classes, self.test_tfm, state = "old", label_exist=False)
 
             train_datasets.append(h_train_dataset)
             valid_datasets.append(h_valid_dataset)
@@ -273,7 +280,7 @@ class Worker():
             Train, Valid, Test = self.split_datas(selected_data, self.data_num)
             h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
             h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
-            h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
+            h_test_dataset  = self.TestDataset(f'{self.hcc_data_dir}/{h_wsi}',Test, self.classes, self.test_tfm, state = "new", label_exist=False)
 
             train_datasets.append(h_train_dataset)
             valid_datasets.append(h_valid_dataset)
@@ -291,7 +298,7 @@ class Worker():
             Train, Valid, Test = self.split_datas(selected_data, self.data_num)
             c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
             c_valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
-            c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+            c_test_dataset  = self.TestDataset(f'{self.cc_data_dir}/{c_wsi}',Test, self.classes, self.train_tfm, state = "new", label_exist=False)
 
             train_datasets.append(c_train_dataset)
             valid_datasets.append(c_valid_dataset)
@@ -429,8 +436,8 @@ class Worker():
         plt.savefig(f"{save_path}/loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
     
     def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class):
-        n_epochs = 20
-        min_epoch = 20
+        n_epochs = 3
+        min_epoch = 2
         notImprove = 0
         min_loss = 1000.
 
@@ -590,25 +597,25 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        # train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
-        train_data, valid_data = [], []
-        if self.state == "old":
-            data_dir = f'{self.hcc_old_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-        elif self.type == "HCC":
-            data_dir = f'{self.hcc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-        elif self.type == "CC":
-            data_dir = f'{self.cc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-        Train, Valid, _ = self.split_datas(selected_data, self.data_num)
-        train_dataset = self.TrainDataset(Train, data_dir, self.classes, self.train_tfm, state = self.state)
-        valid_dataset = self.TrainDataset(Valid, data_dir, self.classes, self.train_tfm, state = self.state)
-        train_data.extend(pd.DataFrame(Train).to_dict(orient='records'))
-        valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
+        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
+        # train_data, valid_data = [], []
+        # if self.state == "old":
+        #     data_dir = f'{self.hcc_old_data_dir}/{wsi}'
+        #     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+        # elif self.type == "HCC":
+        #     data_dir = f'{self.hcc_data_dir}/{wsi}'
+        #     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+        # elif self.type == "CC":
+        #     data_dir = f'{self.cc_data_dir}/{wsi}'
+        #     selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+        # Train, Valid, _ = self.split_datas(selected_data, self.data_num)
+        # train_dataset = self.TrainDataset(Train, data_dir, self.classes, self.train_tfm, state = self.state)
+        # valid_dataset = self.TrainDataset(Valid, data_dir, self.classes, self.train_tfm, state = self.state)
+        # train_data.extend(pd.DataFrame(Train).to_dict(orient='records'))
+        # valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
 
-        pd.DataFrame(train_data).to_csv(f"{save_path}/Data/{condition}_train.csv", index=False)
-        pd.DataFrame(valid_data).to_csv(f"{save_path}/Data/{condition}_valid.csv", index=False)
+        # pd.DataFrame(train_data).to_csv(f"{save_path}/Data/{condition}_train.csv", index=False)
+        # pd.DataFrame(valid_data).to_csv(f"{save_path}/Data/{condition}_valid.csv", index=False)
         print(f"training data number: {len(train_dataset)}, validation data number: {len(valid_dataset)}")
 
         train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
@@ -649,11 +656,11 @@ class Worker():
         # plt.show()
         
         # modelName = f"{condition}_Model_40.ckpt"
-        modelName = f"{condition}_Model.ckpt"
+        modelName = f"{condition}_Model_40_fintune.ckpt"
         model_path = f"{save_path}/Model/{modelName}"
 
         model = self.EfficientNetWithLinear(output_dim=self.class_num)
-        # model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path))
         model.to(device)
         
         
@@ -880,7 +887,7 @@ class Worker():
         modelName = f"{condition}_Model.ckpt"
         model_path = f"{save_path}/Model/{modelName}"
 
-        model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+        model = self.EfficientNetWithLinear(output_dim = 2)
         model.load_state_dict(torch.load(model_path))
         model.to(device)
 
@@ -895,7 +902,7 @@ class Worker():
                 _wsi = wsi
             elif self.type == "HCC":
                 _wsi = wsi + 91
-            else:
+            elif self.type == "CC":
                 _wsi = f"1{wsi:04d}"
                 
         if self.gen_type:
@@ -921,9 +928,9 @@ class Worker():
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{_wsi}" 
 
-            modelName = f"{condition}_Model.ckpt"
+            modelName = f"{condition}_Model_10.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
-            model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+            model = self.EfficientNetWithLinear(output_dim = 2)
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -942,18 +949,18 @@ class Worker():
         # Dataset, Evaluation, Inference
         if self.state == "old":
             _wsi = wsi
-            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_all_patches_filter_v2.csv')
+            test_dataset = self.TestDataset(f'{self.hcc_old_data_dir}/{wsi}', data_info_df, self.classes, self.test_tfm, state='old', label_exist=False)
         elif self.type == "HCC":
             _wsi = wsi + 91
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(f'{self.hcc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
         else:
             _wsi = f'1{wsi:04d}'
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(f'{self.cc_data_dir}/{wsi}', data_info_df, self.classes,self.test_tfm, state='new', label_exist=False)
         
-        _condition = f'{_wsi}_{condition}'
+        _condition = f'{_wsi}_Model_10_{condition}'
         self._test(test_dataset, data_info_df, model, save_path, _condition, "TI")
 
     def plot_confusion_matrix(self, cm, save_path, condition, title='Confusion Matrix'):
@@ -997,7 +1004,7 @@ class Worker():
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{__wsi}" 
         
-        _condition = f'{__wsi}_{condition}'
+        _condition = f'{__wsi}_Model_10_{condition}'
         df = pd.read_csv(f"{save_path}/Metric/{_condition}_labels_predictions.csv")
         # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
         

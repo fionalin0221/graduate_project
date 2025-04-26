@@ -1,57 +1,54 @@
-current_computer : "docker"
-type: "CC"
+current_computer: "docker"
+type: "Mix"
 class_list: ["N", "H", "C"]
-state: "new"
+state: "old"
 generation: 0
 gen_type: False
-
 computers:
-    docker:
-        file_paths:
-            OPENSLIDE_PATH: "/workspace/openslide"
-            HCC_100WTC_model_path: "/workspace/Data/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
-            HCC_40WTC_model_path: "/workspace/Data/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
-            CC_40WTC_model_path: "/workspace/Data/Results/CC_NDPI/40WTC_Result"
-            test_model: "not_self"
-            
-            # use in 100WTC new HCC_wsis: [1, 6, 8, 9, 13, 16, 27, 29, 30]
-            HCC_wsis: []
-            # HCC_wsis: [19, 21, 24, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
-            # == 110, 112, 115, 122, 127, 129, 130, 135, 136, 138, 139, 140, 141, 142, 144
+  docker:
+    file_paths:
+      OPENSLIDE_PATH: "/workspace/openslide"
+      HCC_100WTC_model_path: "/workspace/Data/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
+      HCC_40WTC_model_path: "/workspace/Data/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
+      CC_40WTC_model_path: "/workspace/Data/Results/CC_NDPI/40WTC_Result"
+      test_model: "not_self"
+      # use in 100WTC new HCC_wsis: [1, 6, 8, 9, 13, 16, 27, 29, 30]
+      # HCC_old_wsis: [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
+      HCC_old_wsis: [2, 21, 50, 69, 81]
+      HCC_wsis: []
+      # HCC_wsis: [19, 21, 24, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
 
-            CC_wsis: [143, 144, 169, 170, 171, 175, 178, 180, 183, 184]
-            # CC_wsis: [6, 8, 11, 12, 13, 14, 39, 52, 54, 55, ] #72, 108, 111, 116, 122, 124, 130, 131, 137, 138,] , 185, 208, 244, 246, 247, 248, 291, 374, 375, 377
-            # CC_wsis: [3, 41, 71, 91, 123, 135,177, 192, 207, 222]
-            classes : [0, 2]
+      # == 110, 112, 115, 122, 127, 129, 130, 135, 136, 138, 139, 140, 141, 142, 144
+      # CC_wsis: [6, 8, 11, 12, 13, 14, 39, 52, 54, 55, 72, 108, 111, 116, 122, 124, 130, 131, 137, 138, 143, 144, 169, 170, 171, 175, 178, 180, 183, 184 , 185, 208, 244, 246, 247, 248, 291, 374, 375, 377]
+      # CC_wsis: [72, 108, 111, 116, 122, 124, 130, 131, 137, 138]
+      CC_wsis: [6, 11, 39, 52, 144]
 
-            # trainer
-            num_trial : 2
-            data_num : 6400
-            num_wsi: 40
-            
-            # dataset
-            HCC_old_ndpi_path: "/workspace/Data/ndpi/Old_HCC_WSI_rawdata"
-            HCC_new_ndpi_path : "/workspace/Data/ndpi/New_HCC_WSI_rawdata"
-            HCC_new_patches_save_path: "/workspace/Data/Datas/HCC_Patch"
-            HCC_old_patches_save_path: "/workspace/Data/Datas/HCC_Old_Patch/Unbalanced"
-            HCC_csv_dir : "/workspace/Data/Results/HCC_NDPI/Data_Info"
-            HCC_generation_save_path: "/workspace/Data/Results/HCC_NDPI/Generation_Training"
-            
-            CC_ndpi_path : "/workspace/Data/ndpi/CC_WSI_rawdata"
-            CC_patches_save_path: "/workspace/Data/Datas/CC_Patch"
-            CC_csv_dir : "/workspace/Data/Results/CC_NDPI/Data_Info"
-            CC_generation_save_path: "/workspace/Data/Results/CC_NDPI/Generation_Training"
-        
-            
-            # HCC_2_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/2_class_WTC"
-            # HCC_3_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/3_class_WTC"
-            HCC_WTC_result_save_path: "/workspace/Data/Results/HCC_NDPI"
-            HCC_pseudo_result_save_path: "/workspace/Data/Results/HCC_NDPI/Generation_Training"
-            
-            # CC_2_class_1WTC_result_save_path: "F:/Results/CC_NDPI/2_class_WTC"
-            # CC_3_class_1WTC_result_save_path: "F:/Results/CC_NDPI/3_class_WTC"
-            CC_WTC_result_save_path: "/workspace/Data/Results/CC_NDPI"
-            CC_pseudo_result_save_path: "/workspace/Data/Results/CC_NDPI/Generation_Training"
+      # CC_wsis: [3, 41, 71, 91, 123, 135,177, 192, 207, 222]
+      classes: [0, 1, 2]
+      # trainer
+      num_trial: 2
+      data_num: 6400
+      num_wsi: 10
+      # dataset
+      HCC_old_ndpi_path: "/workspace/Data/ndpi/Old_HCC_WSI_rawdata"
+      HCC_new_ndpi_path: "/workspace/Data/ndpi/New_HCC_WSI_rawdata"
+      HCC_new_patches_save_path: "/workspace/Data/Datas/HCC_Patch"
+      HCC_old_patches_save_path: "/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced"
+      HCC_csv_dir: "/workspace/Data/Results/HCC_NDPI/Data_Info"
+      HCC_generation_save_path: "/workspace/Data/Results/HCC_NDPI/Generation_Training"
+      CC_ndpi_path: "/workspace/Data/ndpi/CC_WSI_rawdata"
+      CC_patches_save_path: "/workspace/Data/Datas/CC_Patch"
+      CC_csv_dir: "/workspace/Data/Results/CC_NDPI/Data_Info"
+      CC_generation_save_path: "/workspace/Data/Results/CC_NDPI/Generation_Training"
+      # HCC_2_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/2_class_WTC"
 
-            Mix_multi_WTC_result_save_path: "/workspace/Data/Results/Mix_NDPI"
-            generation_save_path: "/workspace/Data/Results/Mix_NDPI"
+      # HCC_3_class_1WTC_result_save_path: "F:/Results/HCC_NDPI/3_class_WTC"
+      HCC_WTC_result_save_path: "/workspace/Data/Results/HCC_NDPI"
+      HCC_pseudo_result_save_path: "/workspace/Data/Results/HCC_NDPI/Generation_Training"
+      # CC_2_class_1WTC_result_save_path: "F:/Results/CC_NDPI/2_class_WTC"
+
+      # CC_3_class_1WTC_result_save_path: "F:/Results/CC_NDPI/3_class_WTC"
+      CC_WTC_result_save_path: "/workspace/Data/Results/CC_NDPI"
+      CC_pseudo_result_save_path: "/workspace/Data/Results/CC_NDPI/Generation_Training"
+      Mix_WTC_result_save_path: "/workspace/Data/Results/Mix_NDPI"
+      generation_save_path: "/workspace/Data/Results/Mix_NDPI"

@@ -67,7 +67,8 @@ csv_dir = file_paths['HCC_csv_dir'] if type == "HCC" else file_paths['CC_csv_dir
 if not os.path.exists(csv_dir):
     os.makedirs(csv_dir)
 
-wsis = file_paths[f'{type}_wsis']
+# wsis = file_paths[f'{type}_wsis']
+wsis = list(range(1, 92))
 for wsi in wsis:
     print(f"{type} WSI-{wsi}")
     if not os.path.exists(os.path.join(csv_dir, str(wsi))):
@@ -75,16 +76,33 @@ for wsi in wsis:
     
     if type == "HCC" and state == "old":
         
-        cancer_patch_path = f"{file_paths['old_patches_save_path']}/{wsi}/HCC"
-        normal_patch_path = f"{file_paths['old_patches_save_path']}/{wsi}/Normal"
+        cancer_patch_path = f"{file_paths[f'{type}_old_patches_save_path']}/{wsi}/HCC"
+        normal_patch_path = f"{file_paths[f'{type}_old_patches_save_path']}/{wsi}/Normal"
 
         cancer_file_names = [f for f in os.listdir(cancer_patch_path) if f.endswith(".tif")]
         normal_file_names = [f for f in os.listdir(normal_patch_path) if f.endswith(".tif")]
 
-        cancer_tissue_files = process_files(cancer_file_names, cancer_patch_path)
-        normal_tissue_files = process_files(normal_file_names, normal_patch_path)
+        # cancer_tissue_files = process_files(cancer_file_names, cancer_patch_path)
+        # normal_tissue_files = process_files(normal_file_names, normal_patch_path)
         
-        Filter_Region = {cancer_tissue_files + normal_tissue_files}
+        # Filter_Region = {cancer_tissue_files + normal_tissue_files}
+
+        # Collect patch paths and labels
+        cancer_rows = [
+            [fname, classes[1]]
+            for fname in cancer_file_names
+        ]
+
+        normal_rows = [
+            [fname, classes[0]]
+            for fname in normal_file_names
+        ]
+
+        # Combine and create DataFrame
+        df = pd.DataFrame(cancer_rows + normal_rows, columns=["file_name", "label"])
+
+        save_file_name = f"{csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv"
+        df.to_csv(save_file_name, index=False)
 
     else:
         all_patch_path = f"{file_paths[f'{type}_patches_save_path']}/{wsi}"
@@ -93,10 +111,9 @@ for wsi in wsis:
         tissue_files = process_files(all_file_names, all_patch_path)
         Filter_Region = {"file_name": tissue_files}
 
-    save_file_name = (
-        f"{wsi}/{wsi}_all_patches_filter_v2.csv" if (type == "HCC" and state == "old")
-        else f"{wsi+91}/{wsi+91}_all_patches_filter_v2.csv" if (type == "HCC")
-        else f"{wsi}/1{wsi:04d}_all_patches_filter_v2.csv"
-    )
+        save_file_name = (
+            f"{wsi+91}/{wsi+91}_all_patches_filter_v2.csv" if (type == "HCC")
+            else f"{wsi}/1{wsi:04d}_all_patches_filter_v2.csv"
+        )
 
-    pd.DataFrame(Filter_Region).to_csv(f"{csv_dir}/{save_file_name}", index=False)
+        pd.DataFrame(Filter_Region).to_csv(f"{csv_dir}/{save_file_name}", index=False)

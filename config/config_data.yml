@@ -1,7 +1,7 @@
 current_computer : "docker"
-type: "CC"
+type: "HCC"
 class_list: ["N", "H", "C"]
-state: "new"
+state: "old"
 generation: 5
 gen_type: False
 
@@ -12,20 +12,20 @@ computers:
             100WTC_model_path: "/workspace/Data/Results/HCC_NDPI/100WTC_Result/100WTC_DB_8_1_1_Model.ckpt"
             40WTC_model_path: "/workspace/Data/Results/HCC_NDPI/40WTC_Result/40WTC_DB_8_1_1.ckpt"
             # use in 100WTC new HCC_wsis: [1, 6, 8, 9, 13, 16, 27, 29, 30]
-            HCC_wsis: []
+            HCC_wsis: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
             # HCC_wsis: [19, 21, 24, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
             # == 110, 112, 115, 122, 127, 129, 130, 135, 136, 138, 139, 140, 141, 142, 144
             
             # CC_wsis: [6, 8, 11, 12, 13, 14, 39, 52, 54, 55, 72, 108, 111, 116, 122, 124, 130, 131, 137, 138, 143, 144, 169, 170, 171, 175, 178, 180, 183, 184, 185, 208, 244, 246, 247, 248, 291, 374, 375, 377]
             # CC_wsis: [215, 217, 222, 223, 224, 225, 226, 241, 242, 243]
-            CC_wsis: [291, 374, 375, 377] #[169, 170, 171, 175, 178, 180, 183, 184, 185, 208]
-            classes : [0, 2]
+            # CC_wsis: [291, 374, 375, 377] #[169, 170, 171, 175, 178, 180, 183, 184, 185, 208]
+            classes : [0, 1]
             
             # dataset
             HCC_old_ndpi_path: "/workspace/Data/ndpi/Old_HCC_WSI_rawdata"
             HCC_new_ndpi_path : "/workspace/Data/ndpi/New_HCC_WSI_rawdata"
             HCC_new_patches_save_path: "/workspace/Data/Datas/HCC_Patch"
-            HCC_old_patches_save_path: "/workspace/Data/Datas/HCC_Old_Patch/Unbalanced"
+            HCC_old_patches_save_path: "/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced"
             HCC_csv_dir : "/workspace/Data/Results/HCC_NDPI/Data_Info"
             HCC_generation_save_path: "/workspace/Data/Results/HCC_NDPI/Generation_Training"
             
