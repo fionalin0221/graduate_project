@@ -81,49 +81,115 @@
 
 # # np.savetxt(f"{loss_save_path}/{condition}_epoch_log.csv", header = "train_loss,valid_loss,train_acc,valid_acc", delimiter=",",comments="")
 
-import matplotlib.pyplot as plt
-import pandas as pd
+# import matplotlib.pyplot as plt
+# import pandas as pd
+# import numpy as np
+
+# # 讀取 CSV 檔案
+# base_folder = "/workspace/Data/Results/CC_NDPI/Data_Info"
+# file_path = f"{base_folder}/average_grayscale_per_wsi_new.csv"
+# data = pd.read_csv(file_path)
+
+# # 設定 X 軸範圍（整數刻度）
+# bin_edges = np.arange(int(data[['N_avg_gray', 'C_avg_gray']].min().min()), 
+#                       int(data[['N_avg_gray', 'C_avg_gray']].max().max()) + 2, 1)
+
+# # 計算每個區間的數量
+# n_counts, _ = np.histogram(data['N_avg_gray'], bins=bin_edges)
+# c_counts, _ = np.histogram(data['C_avg_gray'], bins=bin_edges)
+
+# # 設定 X 軸標籤（對應 bin 的中心值）
+# x_labels = bin_edges[:-1] + 0.5  # 讓長條圖對齊區間
+
+# # 繪製 N_avg_gray 圖
+# plt.figure(figsize=(20, 12))
+# plt.bar(x_labels, n_counts, width=0.8, color='blue', alpha=0.7)
+# plt.xticks(np.arange(bin_edges.min(), bin_edges.max(), 1))  # X 軸整數間隔 1
+# plt.xlabel("Gray Value")
+# plt.ylabel("Data Count")
+# plt.title("Histogram of N_avg_gray", fontsize=32)
+# plt.grid(axis='y', linestyle='--', alpha=0.6)
+
+# # 儲存圖片
+# plt.savefig(f"{base_folder}/N_avg_gray_histogram.png", dpi=300)
+# plt.close()  # 關閉當前圖表，避免影響下一張圖
+
+# # 繪製 C_avg_gray 圖
+# plt.figure(figsize=(20, 12))
+# plt.bar(x_labels, c_counts, width=0.8, color='orange', alpha=0.7)
+# plt.xticks(np.arange(bin_edges.min(), bin_edges.max(), 1))  # X 軸整數間隔 1
+# plt.xlabel("Gray Value")
+# plt.ylabel("Data Count")
+# plt.title("Histogram of C_avg_gray", fontsize=32)
+# plt.grid(axis='y', linestyle='--', alpha=0.6)
+
+# # 儲存圖片
+# plt.savefig(f"{base_folder}/C_avg_gray_histogram.png", dpi=300)
+# plt.close()  # 關閉當前圖表
+
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from sklearn.metrics import confusion_matrix
 
-# 讀取 CSV 檔案
-base_folder = "/workspace/Data/Results/CC_NDPI/Data_Info"
-file_path = f"{base_folder}/average_grayscale_per_wsi_new.csv"
-data = pd.read_csv(file_path)
+all_labels = []
+all_preds = []
 
-# 設定 X 軸範圍（整數刻度）
-bin_edges = np.arange(int(data[['N_avg_gray', 'C_avg_gray']].min().min()), 
-                      int(data[['N_avg_gray', 'C_avg_gray']].max().max()) + 2, 1)
+save_dir = "/workspace/Data/Results/Mix_NDPI/10WTC_Result/LP_6400/trial_2"
 
-# 計算每個區間的數量
-n_counts, _ = np.histogram(data['N_avg_gray'], bins=bin_edges)
-c_counts, _ = np.histogram(data['C_avg_gray'], bins=bin_edges)
+wsis =  [6, 11, 39, 52, 144]
 
-# 設定 X 軸標籤（對應 bin 的中心值）
-x_labels = bin_edges[:-1] + 0.5  # 讓長條圖對齊區間
+label_dict = {"N": 0, "H": 1, "C": 2}
 
-# 繪製 N_avg_gray 圖
-plt.figure(figsize=(20, 12))
-plt.bar(x_labels, n_counts, width=0.8, color='blue', alpha=0.7)
-plt.xticks(np.arange(bin_edges.min(), bin_edges.max(), 1))  # X 軸整數間隔 1
-plt.xlabel("Gray Value")
-plt.ylabel("Data Count")
-plt.title("Histogram of N_avg_gray", fontsize=32)
-plt.grid(axis='y', linestyle='--', alpha=0.6)
+for _wsi in wsis:
+    # wsi = _wsi
+    wsi = f"1{_wsi:04d}"
+    save_path = f"{save_dir}/{wsi}"
+    condition = f"{wsi}_10WTC_LP6400_3_class_trial_2" 
+    df = pd.read_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv")
+    labels = df['true_label'].to_list()
+    preds = df['pred_label'].to_list()
+    for label, pred in zip(labels, preds):
+        all_labels.append(label_dict[label])
+        all_preds.append(label_dict[pred])
 
-# 儲存圖片
-plt.savefig(f"{base_folder}/N_avg_gray_histogram.png", dpi=300)
-plt.close()  # 關閉當前圖表，避免影響下一張圖
+# 把你的原資料複製一份
+all_labels_fixed = np.array(all_labels).tolist()
+all_preds_fixed = np.array(all_preds).tolist()
 
-# 繪製 C_avg_gray 圖
-plt.figure(figsize=(20, 12))
-plt.bar(x_labels, c_counts, width=0.8, color='orange', alpha=0.7)
-plt.xticks(np.arange(bin_edges.min(), bin_edges.max(), 1))  # X 軸整數間隔 1
-plt.xlabel("Gray Value")
-plt.ylabel("Data Count")
-plt.title("Histogram of C_avg_gray", fontsize=32)
-plt.grid(axis='y', linestyle='--', alpha=0.6)
+# 人為加上每一個 label 的假樣本（預設 prediction 也設成自己）
+for label in [0, 1, 2]:
+    all_labels_fixed.append(label)
+    all_preds_fixed.append(label)
 
-# 儲存圖片
-plt.savefig(f"{base_folder}/C_avg_gray_histogram.png", dpi=300)
-plt.close()  # 關閉當前圖表
+# 計算 confusion matrix
+cm = confusion_matrix(all_labels_fixed, all_preds_fixed, labels=[0, 1, 2])
 
+# 最後把加的那個 fake 样本在 cm 中扣掉 (每個 fake 樣本只增加 1 到對角線)
+cm = cm - np.eye(3, dtype=int)
+
+condition = "CC_tani_trial_2"
+# cm = confusion_matrix(all_labels, all_preds, labels=[0, 1, 2])
+
+fig, ax = plt.subplots(figsize=(8, 6))
+cax = ax.matshow(cm, cmap='Blues')
+fig.colorbar(cax)
+
+ax.set_xticks(np.arange(3))
+ax.set_yticks(np.arange(3))
+ax.set_xticklabels(["N", "H", "C"], fontsize=14)
+ax.set_yticklabels(["N", "H", "C"], fontsize=14)
+
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        color = "white" if cm[i, j] > cm.max() / 2 else "black"
+        ax.text(j, i, format(cm[i, j], 'd'), ha="center", va="center", color=color, fontsize=18)
+
+title = f"Confusion Matrix of {condition}"
+plt.title(title, fontsize=20, pad=20)
+ax.set_xlabel('Predicted Label', fontsize=16, labelpad=10)
+ax.set_ylabel('True Label', fontsize=16, labelpad=10)
+
+plt.subplots_adjust(top=0.85)
+plt.savefig(f"{save_dir}/Metric/{condition}_confusion_matrix.png")

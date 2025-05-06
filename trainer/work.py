@@ -439,7 +439,7 @@ class Worker():
         valid_loss_list = []
         valid_acc_list = []
 
-        log_file = f"{loss_save_path}/{condition}_log_fintune.yaml"
+        log_file = f"{loss_save_path}/{condition}_log.yaml"
 
         for epoch in range(1, n_epochs):
             # ---------- Training ----------
@@ -556,7 +556,7 @@ class Worker():
                 "valid_acc": valid_acc_list
             })
 
-            training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log_fintune.csv", index=False)
+            training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
 
             if valid_avg_loss < min_loss:
                 # Save model if your model improved
@@ -570,7 +570,9 @@ class Worker():
                 notImprove = 0
             if notImprove >= 2 and epoch >= min_epoch:
                 self.plot_loss_acc(train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, loss_save_path)
-                break
+                return
+
+        self.plot_loss_acc(train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, loss_save_path)
 
     def train_one_WSI(self, wsi):
         if self.state == "old":
@@ -1022,17 +1024,12 @@ class Worker():
             x = (int(x)) // pts_ratio
             y = (int(y)) // pts_ratio
 
-            if pred_label == 0 and gt_label == 0:
-                label = 1
-            elif pred_label == 1 and gt_label == 0:
-                label = 2
-            elif pred_label == 1 and gt_label == 1:
-                label = 3
-            elif pred_label == 0 and gt_label == 1:
-                label = 4
+            if pred_label == gt_label:
+                label = pred_label + 1  # 正確預測：標上 1,2,3
             else:
-                label = 0
-            
+                label = 10 * (gt_label + 1) + (pred_label + 1)  # 錯誤預測：編碼成 11,12,13, 21,22,23, 31,32,33 之類
+
+
             all_pts.append([x, y, label])
 
         all_pts = np.array(all_pts)
@@ -1042,19 +1039,34 @@ class Worker():
         image = np.zeros((y_max + 1, x_max + 1))
         for x, y, label in all_pts:
             image[y, x] = label
-        
+
+        color_map = {
+            1: 'green',     # 正確 Normal
+            2: 'red',       # 正確 HCC
+            3: 'blue',      # 正確 CC
+            12: 'orange',   # Normal -> HCC
+            13: 'yellow',   # Normal -> CC
+            21: 'cyan',     # HCC -> Normal
+            23: 'magenta',  # HCC -> CC
+            31: 'purple',   # CC -> Normal
+            32: 'brown'     # CC -> HCC
+        }
+
         legend_elements = [
-            plt.Line2D([0], [0], color='green', lw=4, label='True Negative'),   # GT - Normal, Pred Normal
-            plt.Line2D([0], [0], color='orange', lw=4, label='Flase Negative'),   # GT - Normal, Pred - HCC
-            plt.Line2D([0], [0], color='red', lw=4, label='True Positive'),     # GT - HCC, Pred - HCC
-            plt.Line2D([0], [0], color='blue', lw=4, label='False Positive'), # GT - HCC, Pred -Normal
+            plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
+            plt.Line2D([0], [0], color='red', lw=4, label='True HCC'),
+            plt.Line2D([0], [0], color='blue', lw=4, label='True CC'),
+            plt.Line2D([0], [0], color='orange', lw=4, label='Normal -> HCC'),
+            plt.Line2D([0], [0], color='yellow', lw=4, label='Normal -> CC'),
+            plt.Line2D([0], [0], color='cyan', lw=4, label='HCC -> Normal'),
+            plt.Line2D([0], [0], color='magenta', lw=4, label='HCC -> CC'),
+            plt.Line2D([0], [0], color='purple', lw=4, label='CC -> Normal'),
+            plt.Line2D([0], [0], color='brown', lw=4, label='CC -> HCC')
         ]
 
         plt.figure(figsize=(x_max // 20, y_max // 20))
-        plt.imshow(image == 1, cmap=ListedColormap(['white', 'green']), interpolation='nearest', alpha=0.5)
-        plt.imshow(image == 3, cmap=ListedColormap(['white', 'red']), interpolation='nearest', alpha=0.5)
-        plt.imshow(image == 2, cmap=ListedColormap(['white', 'orange']), interpolation='nearest', alpha=0.5)
-        plt.imshow(image == 4, cmap=ListedColormap(['white', 'blue']), interpolation='nearest', alpha=0.5)
+        for label_value, color in color_map.items():
+            plt.imshow(image == label_value, cmap=ListedColormap([[1,1,1,0], color]), interpolation='nearest', alpha=0.5)
         
         # plt.imshow(image, cmap=cmap, interpolation='nearest')
         plt.title(f"Prediction vs Ground Truth of WSI {__wsi}", fontsize=20, pad=20)
