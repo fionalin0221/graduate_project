@@ -10,17 +10,17 @@ def main():
     current_computer = config['current_computer']
     file_paths = config['computers'][current_computer]['file_paths']
     type = config['type']
-    # wsis = file_paths[f'HCC_old_wsis']
+    wsis = file_paths[f'HCC_old_wsis']
     # wsis = file_paths[f'CC_wsis']
 
     worker = Worker(config)
-    worker.train()
+    # worker.train()
     # worker.train_multi_model()
     # worker.train_generation()
     # worker.test()
     # worker.contour_analysis_multi(0, )
-    # for wsi in wsis:
-        # worker.train_one_WSI(wsi)
+    for wsi in wsis:
+        worker.train_one_WSI(wsi)
         # worker.test_one_WSI(wsi)
         # worker.test_TATI(wsi, 0, save_path = None)
         # worker.plot_TI_Result(wsi, 0, save_path = None)
