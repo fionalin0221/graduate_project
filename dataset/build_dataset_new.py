@@ -17,17 +17,17 @@ def check_patch_condition(image_path):
     end_read_img = time.time()
     # print(f"read img time: {end_read_img-start_read_img}")
 
-    start_color_mean = time.time()
-    blue_mean = np.mean(img[:, :, 2])
-    red_mean = np.mean(img[:, :, 0])
-    if blue_mean <= 200 and red_mean <= 180:
-        return 1
-    end_color_mean = time.time()
+    # start_color_mean = time.time()
+    # blue_mean = np.mean(img[:, :, 2])
+    # red_mean = np.mean(img[:, :, 0])
+    # if blue_mean <= 200 and red_mean <= 180:
+    #     return 1
+    # end_color_mean = time.time()
     # print(f"count color mean time: {end_color_mean-start_color_mean}")
 
     start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    if np.mean(gray_image) >= 230:  #white
+    if np.mean(gray_image) >= 250:  #white
         return 1
     end_mean_pixel = time.time()
     # print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")
@@ -67,8 +67,8 @@ csv_dir = file_paths['HCC_csv_dir'] if type == "HCC" else file_paths['CC_csv_dir
 if not os.path.exists(csv_dir):
     os.makedirs(csv_dir)
 
-# wsis = file_paths[f'{type}_wsis']
-wsis = list(range(1, 92))
+wsis = file_paths[f'{type}_wsis']
+# wsis = list(range(1, 92))
 for wsi in wsis:
     print(f"{type} WSI-{wsi}")
     if not os.path.exists(os.path.join(csv_dir, str(wsi))):

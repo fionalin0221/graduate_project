@@ -26,10 +26,13 @@ else:
     ndpi_path = file_paths[f'{type}_ndpi_path']
 wsis =  file_paths[f'{type}_wsis']
 
-OPENSLIDE_PATH = file_paths['OPENSLIDE_PATH']
-if hasattr(os, 'add_dll_directory'):
-    # Python >= 3.8 on Windows
-    with os.add_dll_directory(OPENSLIDE_PATH):
+if current_computer == "docker":
+    OPENSLIDE_PATH = file_paths['OPENSLIDE_PATH']
+    if hasattr(os, 'add_dll_directory'):
+        # Python >= 3.8 on Windows
+        with os.add_dll_directory(OPENSLIDE_PATH):
+            import openslide
+    else:
         import openslide
 else:
     import openslide

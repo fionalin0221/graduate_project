@@ -694,7 +694,11 @@ class Worker():
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=15)
+        min_epoch = 15
+        start_time = time.time()
+        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=min_epoch)
+        end_time = time.time()
+        print(f"{min_epoch} epochs time on ssd for 1 WSI, {self.data_num} patches for each class: {end_time-start_time}")
 
     def train(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -885,16 +889,13 @@ class Worker():
     def test_one_WSI(self, wsi):
         if self.state == "old":
             _wsi = wsi
-            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_path = f"{self.save_path}/{_wsi}/trial_{self.num_trial}"        
         elif self.type == "HCC":
             _wsi = wsi + 91
-            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_path = f"{self.save_path}/{_wsi}/trial_{self.num_trial}"
         elif self.type == "CC":
             _wsi = f"1{wsi:04d}"
-            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_path = f"{self.save_path}/{wsi}/trial_{self.num_trial}"
+        
+        condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+        save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -906,35 +907,52 @@ class Worker():
         test_data = []
         if self.state == "old":
             _wsi = wsi
-            data_dir = f'{self.hcc_old_data_dir}/{_wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
         elif self.type == "HCC":
             _wsi = wsi + 91
-            data_dir = f'{self.hcc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
         elif self.type == "CC":
             _wsi = f"1{wsi:04d}"
-            data_dir = f'{self.cc_data_dir}/{wsi}'
-            selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-        
-        _, _, Test = self.split_datas(selected_data, self.data_num)
-        test_dataset = self.TestDataset(data_dir, Test, self.classes, self.test_tfm, state = self.state, label_exist=False)
-        test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
-        pd.DataFrame(test_data).to_csv(f"{save_path}/Data/{condition}_test.csv", index=False)
+            data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
 
         print(f"testing data number: {len(test_dataset)}")
+
+        if self.test_model == "self":        
+            # Prepare Model
+            modelName = f"{condition}_Model.ckpt"
+            model_path = f"{save_path}/Model/{modelName}"
+
+            model = self.EfficientNetWithLinear(output_dim = 2)
+            model.load_state_dict(torch.load(model_path))
+            model.to(device)
+
+            self._test(test_dataset, data_info_df, model, save_path, condition, "Metric")
         
-        # Prepare Model
-        modelName = f"{condition}_Model.ckpt"
-        model_path = f"{save_path}/Model/{modelName}"
+        elif self.test_model == "multi":
+            for model_wsi in range(6, 7):
+                # Prepare Model
+                if self.state == "old":
+                    _model_wsi = model_wsi
+                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.num_trial}"
+                elif self.type == "HCC":
+                    _model_wsi = model_wsi + 91
+                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{self.num_trial}"
+                elif self.type == "CC":
+                    _model_wsi = f"1{model_wsi:04d}"
+                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.num_trial}"
 
-        model = self.EfficientNetWithLinear(output_dim = 2)
-        model.load_state_dict(torch.load(model_path))
-        model.to(device)
+                modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}_Model.ckpt"
+                model_path = f"{model_dir}/Model/{modelName}"
+                
+                model = self.EfficientNetWithLinear(output_dim = 2)
+                model.load_state_dict(torch.load(model_path))
+                model.to(device)
 
-        data_info_df = pd.read_csv(f"{save_path}/Data/{condition}_test.csv")
-
-        self._test(test_dataset, data_info_df, model, save_path, condition, "Metric")
+                _condition = f'{condition}_on_model_{model_wsi}'
+                self._test(test_dataset, data_info_df, model, save_path, _condition, "TI")
     
     def test(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -985,14 +1003,14 @@ class Worker():
                 model = self.EfficientNetWithLinear(output_dim = 2)
 
         else:
-            if self.test_model == "self":
-                condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
-                save_path = save_dir
-            else:
-                condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
-                save_path = f"{save_dir}/{_wsi}" 
+            # if self.test_model == "self":
+            #     condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            #     save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+            #     save_path = save_dir
+            # else:
+            condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
+            save_path = f"{save_dir}/{_wsi}" 
 
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
