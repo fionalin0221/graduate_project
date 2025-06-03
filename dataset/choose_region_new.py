@@ -112,6 +112,7 @@ with open(config_path, 'r') as file:
 
 current_computer = config['current_computer']
 type = config['type']
+state = config['state']
 file_paths = config['computers'][current_computer]['file_paths']
 class_list = config["class_list"]
 classes = [class_list[i] for i in file_paths['classes']]
@@ -122,7 +123,7 @@ for wsi in wsis:
     print(f'{type} WSI : ', wsi)
     if type == "HCC":
         xml_name = "LIVER_{:05d}.xml".format(wsi)
-        tree = ET.parse(os.path.join(file_paths['HCC_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
+        tree = ET.parse(os.path.join(file_paths[f'HCC_{state}_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
     elif type == "CC":
         xml_name = "LIVER_1{:04d}.xml".format(wsi)
         tree = ET.parse(os.path.join(file_paths['CC_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
@@ -147,7 +148,10 @@ for wsi in wsis:
     data_info = {"file_name": [], "label": []}
     nums = [0] * len(classes)
 
-    patches_path = os.path.join(file_paths[f'{type}_patches_save_path'],f"{wsi}")
+    if type == "HCC":
+        patches_path = os.path.join(file_paths[f'{type}_{state}_patches_save_path'],f"{wsi+91}")
+    else:
+        patches_path = os.path.join(file_paths[f'{type}_patches_save_path'],f"{wsi}")
     if not os.path.exists(patches_path):
         print(f"Skipping: {patches_path} not found")
         continue
