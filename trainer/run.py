@@ -14,7 +14,7 @@ def main():
     wsis = file_paths[f'CC_wsis']
 
     worker = Worker(config)
-    worker.train()
+    # worker.train()
     # worker.train_multi_model()
     # worker.train_generation()
     # worker.test()
