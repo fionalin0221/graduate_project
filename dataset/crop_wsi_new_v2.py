@@ -73,15 +73,12 @@ for wsi in wsis:
 
         print(patches_save_path)
 
-        with ThreadPoolExecutor() as executor:
-            futures = []
+        with ThreadPoolExecutor(max_workers=8) as executor:
             print(f"Using {executor._max_workers} threads.")
+            futures = []
             for height in tqdm(range(0, p_h*448, 448)):
-                for width in tqdm(range(0, p_w*448, 448)):
-                # futures.append(executor.submit(save_patch, width, height, wsi_openslide, patches_save_path))
-                # img = np.array(wsi_openslide.read_region((width, height), 0, (448, 448)))
-                # img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
-                # cv2.imwrite(f"{patches_save_path}/{width}_{height}.tif", img)
+                for width in range(0, p_w*448, 448):
+                    futures.append(executor.submit(save_patch, width, height, wsi_openslide, patches_save_path))
             
             for _ in tqdm(as_completed(futures), total=len(futures), desc=f"WSI-{wsi} Patches"):
                 pass
