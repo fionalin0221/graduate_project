@@ -512,7 +512,7 @@ class Worker():
         plt.savefig(f"{save_path}/loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
     
     def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class, min_epoch = 20):
-        n_epochs = min_epoch
+        n_epochs = 100
         notImprove = 0
         min_loss = 1000.
 
@@ -694,7 +694,7 @@ class Worker():
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-        min_epoch = 15
+        min_epoch = 20
         start_time = time.time()
         self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=min_epoch)
         end_time = time.time()
@@ -895,7 +895,10 @@ class Worker():
             _wsi = f"1{wsi:04d}"
         
         condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-        save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+        if self.type == "HCC":
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+        else:
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -903,18 +906,14 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
         
-        # _, _, test_dataset = self.prepare_dataset(f"{save_path}/Data", condition, 0, "test")
         test_data = []
         if self.state == "old":
-            _wsi = wsi
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
         elif self.type == "HCC":
-            _wsi = wsi + 91
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
         elif self.type == "CC":
-            _wsi = f"1{wsi:04d}"
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
 
@@ -979,14 +978,14 @@ class Worker():
 
         self._test(test_dataset, data_info_df, model, save_path, condition, "Metric")
 
-    def test_TATI(self, wsi, gen, save_path):
+    def test_TATI(self, wsi, gen, save_path, test_type):
         ### Multi-WTC Evaluation ###
         if save_path == None:
             if self.state == "old":
                 _wsi = wsi
-            elif self.type == "HCC":
+            elif test_type == "HCC":
                 _wsi = wsi + 91
-            else:
+            elif test_type == "CC":
                 _wsi = f"1{wsi:04d}"
                 
         if self.gen_type:
@@ -1003,11 +1002,6 @@ class Worker():
                 model = self.EfficientNetWithLinear(output_dim = 2)
 
         else:
-            # if self.test_model == "self":
-            #     condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            #     save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
-            #     save_path = save_dir
-            # else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
             save_path = f"{save_dir}/{_wsi}" 
@@ -1022,9 +1016,6 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        print(f"WSI {wsi} | {condition}")
-        print(self.classes) #class0 = Normal
-
         # Prepare Model
         model.load_state_dict(torch.load(model_path))
         model.to(device)
@@ -1032,19 +1023,20 @@ class Worker():
 
         # Dataset, Evaluation, Inference
         if self.state == "old":
-            _wsi = wsi
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
-        elif self.type == "HCC":
-            _wsi = wsi + 91
+        elif test_type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
-        else:
-            _wsi = f'1{wsi:04d}'
+        elif test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
         
         _condition = f'{_wsi}_{condition}'
+
+        print(f"WSI {wsi} | {_condition}")
+        print(self.classes)
+
         self._test(test_dataset, data_info_df, model, save_path, _condition, "TI")
 
     def plot_confusion_matrix(self, cm, save_path, condition, title='Confusion Matrix'):

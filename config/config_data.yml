@@ -1,4 +1,4 @@
-current_computer : "docker"
+current_computer : "ubuntu_2"
 type: "CC"
 class_list: ["N", "H", "C"]
 state: "new"
