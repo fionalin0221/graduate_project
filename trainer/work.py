@@ -174,7 +174,8 @@ class Worker():
         if data_num == "ALL":
             for num in range(len(self.classes)):
                 if len(class_file_names[num]) > 0:
-                    datas.append(class_file_names[num])
+                    # datas.append(class_file_names[num])
+                    datas.append([(name, False) for name in class_file_names[num]])
                 else:
                     datas.append([])
         else:

@@ -11,8 +11,8 @@ def main():
     file_paths = config['computers'][current_computer]['file_paths']
     test_type = file_paths[f'test_type']
 
-    # wsis = file_paths[f'HCC_old_wsis']
-    wsis = file_paths[f'HCC_wsis']
+    wsis = file_paths[f'HCC_old_wsis']
+    # wsis = file_paths[f'HCC_wsis']
     # wsis = file_paths[f'CC_wsis']
 
     worker = Worker(config)
@@ -22,9 +22,9 @@ def main():
     # worker.test()
     # worker.contour_analysis_multi(0, )
     for wsi in wsis:
-        # worker.train_one_WSI(wsi)
-        # worker.test_one_WSI(wsi)
-        worker.test_TATI(wsi, 0, save_path = None, test_type = test_type)
+        worker.train_one_WSI(wsi)
+        worker.test_one_WSI(wsi)
+        # worker.test_TATI(wsi, 0, save_path = None, test_type = test_type)
         # worker.plot_TI_Result(wsi, 0, save_path = None)
         # worker.contour_analysis(wsi, 0, save_path = None)
 
