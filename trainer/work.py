@@ -54,6 +54,9 @@ class Worker():
         self.num_wsi = self.file_paths['num_wsi']
         self.test_model = self.file_paths['test_model']
 
+        self.test_state = self.file_paths['test_state']
+        self.test_type = self.file_paths['test_type']
+
         if self.gen_type:
             self.save_dir = self.file_paths[f'{self.type}_generation_save_path']
             os.makedirs(self.save_dir, exist_ok=True)
@@ -384,7 +387,27 @@ class Worker():
                 train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
-            
+            else:
+                if self.test_type == "HCC":
+                    if self.gen_type:
+                        # selected_data = pd.read_csv(f'{save_path}/{h_wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                        selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv')
+                    else:
+                        selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
+                else:
+                    if self.gen_type:
+                        selected_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                    else:
+                        selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+
             train_data.extend(pd.DataFrame(Train).to_dict(orient='records'))
             valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
             test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
@@ -402,7 +425,12 @@ class Worker():
         selected_patches: patches that is in some class of contour, but the label of patch may not the same as the contour label.
         
         '''
-        _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
+        if self.test_state == "old":
+            _wsi = wsi
+        elif self.test_type == "HCC":
+            _wsi = wsi + 91
+        elif self.test_type == "CC":
+            _wsi = f"1{wsi:04d}"
 
         if gen == 1:
             df = pd.read_csv(f"{save_path}/TI/{_wsi}_{self.class_num}_class_patch_in_region_filter_2_v2_TI.csv")
@@ -434,32 +462,65 @@ class Worker():
 
         ### First sorted pts on x, then on y ###
         sorted_index = np.lexsort((all_pts[:, 1], all_pts[:, 0]))
-        sorted_all_pts = all_pts[sorted_index]
+        sorted_all_pts = all_pts[sorted_index] # x, y, label
 
         selected_patches = {'file_name': [], 'label': []}
         
-        cl = "H" if self.type == "HCC" else "C"
-        selected_patches, patches_in_cancer_regions, tp_in_cancer_regions, fp_in_cancer_regions = \
-            find_contours.find_contour(wsi, sorted_all_pts, self.state, cl, area_thresh, all_patches, selected_patches)
+        # cl = "H" if self.type == "HCC" else "C"
+        # selected_patches, patches_in_cancer_regions, tp_in_cancer_regions, fp_in_cancer_regions = \
+            # find_contours.find_contour(wsi, sorted_all_pts, self.state, cl, area_thresh, all_patches, selected_patches)
         # print(len(selected_patches['file_name']))
         
-        selected_patches, patches_in_norm_regions, tn_in_norm_regions, fn_in_norm_regions = \
-            find_contours.find_contour(wsi, sorted_all_pts, self.state, "N", area_thresh, all_patches, selected_patches)
+        # selected_patches, patches_in_norm_regions, tn_in_norm_regions, fn_in_norm_regions = \
+            # find_contours.find_contour(wsi, sorted_all_pts, self.state, "N", area_thresh, all_patches, selected_patches)
         # print(len(selected_patches['file_name']))
+
+        region_data = {}
+        for cl in self.classes:
+            selected_patches, patches_in_regions, tp_in_regions, fp_in_regions = \
+                find_contours.find_contour(wsi, sorted_all_pts, self.state, cl, area_thresh, all_patches, selected_patches)
+            
+            region_data[cl] = {
+                'patches_in_regions': patches_in_regions,
+                'tp_in_regions': tp_in_regions,
+                'fp_in_regions': fp_in_regions
+            }
 
         pd.DataFrame(selected_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv", index=False)
         
-        ideal_patches, pl_cancer_contour_df, pl_norm_contour_df = find_contours.zscore_filter(
-            tp_in_cancer_regions,
-            fp_in_cancer_regions,
-            tn_in_norm_regions,
-            fn_in_norm_regions,
-            patches_in_cancer_regions,
-            patches_in_norm_regions,
-            cl
-        )
-        pl_cancer_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tpfp_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
-        pl_norm_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tnfn_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        # ideal_patches, pl_cancer_contour_df, pl_norm_contour_df = find_contours.zscore_filter(
+        #     tp_in_cancer_regions,
+        #     fp_in_cancer_regions,
+        #     tn_in_norm_regions,
+        #     fn_in_norm_regions,
+        #     patches_in_cancer_regions,
+        #     patches_in_norm_regions,
+        #     cl
+        # )
+
+        ideal_patches = {'file_name': [], 'label': []}
+        pl_contour_dfs = {}
+
+        for cl in self.classes:
+            data = region_data[cl]
+            # other_classes = [x for x in self.classes if x != cl]
+            # neg_tp = pd.concat([region_data[c]['tp_in_regions'] for c in other_classes], ignore_index=True) # neg_tp can view as tn
+            # neg_fp = pd.concat([region_data[c]['fp_in_regions'] for c in other_classes], ignore_index=True) # neg_fp can view as fn
+            # neg_patches = pd.concat([region_data[c]['patches_in_regions'] for c in other_classes], ignore_index=True)
+
+            ideal, pos_df = find_contours.zscore_filter_multi_class(
+                data['tp_in_regions'],
+                data['fp_in_regions'],
+                data['patches_in_regions'],
+                cl
+            )
+            ideal_patches['file_name'] += ideal['file_name']
+            ideal_patches['label'] += ideal['label']
+            pl_contour_dfs[cl] = pos_df
+
+        # pl_cancer_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tpfp_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        # pl_norm_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tnfn_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
+        print(pl_contour_dfs)
         pd.DataFrame(ideal_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv", index=False)
 
     class EfficientNetWithLinear(nn.Module):
@@ -539,7 +600,7 @@ class Worker():
                 # A batch consists of image data and corresponding labels.
                 end_time = time.time()
                 # print(f"read data time: {end_time-start_time}")
-                imgs, labels, file_names = batch
+                imgs, labels, _ = batch
 
                 # Forward the data. (Make sure data and model are on the same device.)
                 if target_class == None:
@@ -583,6 +644,7 @@ class Worker():
             train_acc_list.append(train_avg_acc)
             msg = f"[ Train | {epoch:03d}/{n_epochs:03d} ] loss = {train_avg_loss:.5f}, acc = {train_avg_acc:.5f}"
             print(msg)
+
             with open(log_file, "a") as f:
                 yaml.dump(msg, f, default_flow_style=False)
             torch.cuda.empty_cache()
@@ -599,7 +661,7 @@ class Worker():
             with torch.no_grad():
                 for idx, batch in enumerate(valid_bar):
                     # A batch consists of image data and corresponding labels.
-                    imgs, labels, file_names = batch
+                    imgs, labels, _ = batch
                     if target_class == None:
                         labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
                         logits = model(imgs.to(device))
@@ -770,11 +832,18 @@ class Worker():
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
 
-    def train_generation(self):
-        wsis = {"HCC": self.hcc_wsis, "CC": self.cc_wsis}.get(self.type)
+    def train_generation(self, wsi):
+        # wsis = {"HCC": self.hcc_wsis, "CC": self.cc_wsis}.get(self.type)
 
-        wsi = wsis[0]
-        _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
+        # wsi = wsis[0]
+        # _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
+        if self.test_state == "old":
+            _wsi = wsi
+        elif self.test_type == "HCC":
+            _wsi = wsi + 91
+        elif self.test_type == "CC":
+            _wsi = f"1{wsi:04d}"
+
         save_path = f'{self.save_dir}/{_wsi}/trial_{self.num_trial}'
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
@@ -783,7 +852,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        for gen in range(2, self.generation):
+        for gen in range(1, self.generation):
             # condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
             condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
             print(condition)
@@ -792,20 +861,22 @@ class Worker():
             self.build_pl_dataset(wsi, gen, save_path)
             
             # Read TI.csv, prepare Dataframe
-            train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen)
+            train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi)
 
             train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
             val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
         
             # Model setting and transfer learning or not
-            model = self.EfficientNetWithLinear(output_dim = 2)
+            model = self.EfficientNetWithLinear(output_dim = self.class_num)
             model.to(device)
             modelName = f"{condition}_1WTC.ckpt"
 
             criterion = nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
+            min_epoch = 2
+
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=min_epoch)
 
     def _test(self, test_dataset, data_info_df, model, save_path, condition, test_type):
         # Record Information
@@ -979,28 +1050,33 @@ class Worker():
 
         self._test(test_dataset, data_info_df, model, save_path, condition, "Metric")
 
-    def test_TATI(self, wsi, gen, save_path, test_type):
+    def test_TATI(self, wsi, gen, save_path):
         ### Multi-WTC Evaluation ###
-        if save_path == None:
-            if self.state == "old":
-                _wsi = wsi
-            elif test_type == "HCC":
-                _wsi = wsi + 91
-            elif test_type == "CC":
-                _wsi = f"1{wsi:04d}"
-                
+        # if save_path == None:
+        if self.test_state == "old":
+            _wsi = wsi
+        elif self.test_type == "HCC":
+            _wsi = wsi + 91
+        elif self.test_type == "CC":
+            _wsi = f"1{wsi:04d}"
+        
         if self.gen_type:
-            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
+            if save_path == None:
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
             if gen == 0:
                 condition = f'{self.class_num}_class'
-                model_path = self.file_paths['HCC_100WTC_model_path']
-                model = EfficientNet.from_name('efficientnet-b0')
-                model._fc= nn.Linear(1280, 2)
+                if self.test_model == "3_class_100WTC":
+                    model_path = self.file_paths['100WTC_model_path']
+                    model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+                else:
+                    model_path = self.file_paths['HCC_100WTC_model_path']
+                    model = EfficientNet.from_name('efficientnet-b0')
+                    model._fc= nn.Linear(1280, 2)
             else:
                 # condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
                 condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
                 model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
-                model = self.EfficientNetWithLinear(output_dim = 2)
+                model = self.EfficientNetWithLinear(output_dim = self.class_num)
 
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -1023,13 +1099,13 @@ class Worker():
         Sigmoid = nn.Sigmoid()
 
         # Dataset, Evaluation, Inference
-        if self.state == "old":
+        if self.test_state == "old":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
-        elif test_type == "HCC":
+        elif self.test_type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
-        elif test_type == "CC":
+        elif self.test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
         

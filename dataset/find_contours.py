@@ -33,9 +33,9 @@ def find_contours_of_connected_components(label, sorted_pts, area_thresh):
     y_max = np.max(sorted_pts[:, 1])
     patches_labels = np.zeros((y_max+1, x_max+1), np.uint8)  # for connected-components of HCC/Normal patches
     
-    if label == 'H':
-        cate_pts = sorted_pts[sorted_pts[:, 2] == 0]
     if label == 'N':
+        cate_pts = sorted_pts[sorted_pts[:, 2] == 0]
+    if label == 'H':
         cate_pts = sorted_pts[sorted_pts[:, 2] == 1]
     if label == 'C':
         cate_pts = sorted_pts[sorted_pts[:, 2] == 2]
@@ -136,6 +136,7 @@ def find_contour(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selec
         )
 
         ### Check pts in every HCC region or not ###
+        true_label_index = {'N': 0, 'H': 1, 'C': 2}[cl]
         for idx, region in enumerate(regions):
             if ((Point_in_Region(left_up, region)==True)):
                 if (formatted_filename in all_patches) and (formatted_filename not in selected_patches['file_name']):
@@ -151,9 +152,9 @@ def find_contour(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selec
                     if idx not in fp_in_regions.keys():
                         fp_in_regions[idx] = 0
                     
-                    if pseudo_label == 0:
+                    if pseudo_label == true_label_index:
                         tp_in_regions[idx] += 1
-                    if pseudo_label == 1:
+                    else:
                         fp_in_regions[idx] += 1
         
         for region_hull in regions_hulls:
@@ -218,3 +219,34 @@ def zscore_filter(tp_in_cancer_regions, fp_in_cancer_regions, tn_in_norm_regions
         print('NO Normal')
 
     return ideal_patches, pl_cancer_contour_df, pl_norm_contour_df
+
+def zscore_filter_multi_class(tp_in_regions, fp_in_regions, patches_in_regions, cl):
+    pos_num = 0
+    positive_cases = {"contour_key": [], "number": [], "density": []}
+    for key in tp_in_regions.keys():
+        num = tp_in_regions[key] + fp_in_regions[key]
+        den = tp_in_regions[key] / (tp_in_regions[key] + fp_in_regions[key])
+        positive_cases["contour_key"].append(key)
+        positive_cases["number"].append(num)
+        positive_cases["density"].append(den)
+        pos_num += num
+    pos_df = pd.DataFrame(positive_cases)
+
+    # num_filter_pos_df = pos_df[pos_df["number"] >= num_thresh]
+    # num_filter_neg_df = neg_df[neg_df["number"] >= num_thresh]
+
+    ideal_patches = {'file_name': [], 'label': []}
+    
+    if pos_num >0:
+        pl_contour_df = ND_zscore_filter(contour_df=pos_df, weight=[1, 1])  # z-score
+        # Filter keys where the sum of z-scores is greater than or equal to 0
+        pl_filtered_keys = pl_contour_df[pl_contour_df['zscore_sum'] >= 0]['contour_key'].to_list()
+        for pl_key in pl_filtered_keys:
+            ideal_patches['file_name'].extend(patches_in_regions[pl_key])
+            ideal_patches['label'].extend([cl] * len(patches_in_regions[pl_key]))
+
+    else:
+        pl_contour_df = pos_df
+        print(f'NO {cl}')
+
+    return ideal_patches, pl_contour_df
