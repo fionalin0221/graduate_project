@@ -164,6 +164,66 @@ def find_contour(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selec
 
     return selected_patches, patches_in_regions, tp_in_regions, fp_in_regions
 
+def find_contour_new(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selected_patches):
+    patches_in_hulls = []
+    tp_in_regions, fp_in_regions = {}, {}
+    patches_in_regions = []
+
+    ### Get contours ###
+    contours, hulls, _, _, _ = find_contours_of_connected_components(label=cl, sorted_pts=sorted_all_pts, area_thresh=area_thresh)
+    regions = contours_processing(contours, forImage=False)
+    regions_hulls = contours_processing(hulls, forImage=False)
+
+    ### Select data in regions ###
+    for pts in tqdm(sorted_all_pts):
+        ptx, pty, pseudo_label = pts[0], pts[1], pts[2]
+        left_up = [int(ptx), int(pty)]
+        # right_up = [int(ptx) + 1, int(pty)]
+        # left_down = [int(ptx), int(pty) + 1]
+        # right_down = [int(ptx) + 1, int(pty) + 1]
+
+        cl_text = "HCC" if cl == "H" else "Normal"
+        formatted_filename = (
+            f'C{wsi}_{cl_text}-{int(ptx * pts_ratio):05d}-{int(pty * pts_ratio):05d}-{pts_ratio:05d}x{pts_ratio:05d}.tif'
+            if state == "old"
+            else f'{int(ptx * pts_ratio)}_{int(pty * pts_ratio)}.tif'
+        )
+
+        ### Check pts in every HCC region or not ###
+        true_label_index = {'N': 0, 'H': 1, 'C': 2}[cl]
+        for idx, region in enumerate(regions):
+            if ((Point_in_Region(left_up, region)==True)):
+                if (formatted_filename in all_patches) and (formatted_filename not in selected_patches['file_name']):
+                    selected_patches['file_name'].append(formatted_filename)
+                    selected_patches['label'].append(cl)
+
+                    tp_or_fp = 'tp' if pseudo_label == true_label_index else 'fp'
+                    # if idx not in patches_in_regions.keys():
+                    #     patches_in_regions[idx] = []
+                    # patches_in_regions[idx].append({'file_name':formatted_filename, 'type':tp_or_fp})
+                    patches_in_regions.append({
+                        'contour_idx': idx,
+                        'file_name': formatted_filename,
+                        'type': tp_or_fp
+                    })
+
+                    if idx not in tp_in_regions.keys():
+                        tp_in_regions[idx] = 0
+                    if idx not in fp_in_regions.keys():
+                        fp_in_regions[idx] = 0
+                    
+                    if tp_or_fp == 'tp':
+                        tp_in_regions[idx] += 1
+                    else:
+                        fp_in_regions[idx] += 1
+        
+        for region_hull in regions_hulls:
+            if ((Point_in_Region(left_up, region_hull)==True)):
+                if formatted_filename not in patches_in_hulls:
+                    patches_in_hulls.append(formatted_filename)
+
+    return selected_patches, patches_in_regions, tp_in_regions, fp_in_regions
+
 def zscore_filter(tp_in_cancer_regions, fp_in_cancer_regions, tn_in_norm_regions, fn_in_norm_regions, patches_in_cancer_regions, patches_in_norm_regions, cl):
     pos_num, neg_num = 0,0
     positive_cases = {"contour_key": [], "number": [], "density": []}
@@ -250,3 +310,48 @@ def zscore_filter_multi_class(tp_in_regions, fp_in_regions, patches_in_regions, 
         print(f'NO {cl}')
 
     return ideal_patches, pl_contour_df
+
+def zscore_filter_multi_class_new(tp_in_regions, fp_in_regions, patches_in_regions, cl):
+    pos_num = 0
+    positive_cases = {"contour_key": [], "number": [], "density": []}
+    for key in tp_in_regions.keys():
+        num = tp_in_regions[key] + fp_in_regions[key]
+        den = tp_in_regions[key] / (tp_in_regions[key] + fp_in_regions[key])
+        positive_cases["contour_key"].append(key)
+        positive_cases["number"].append(num)
+        positive_cases["density"].append(den)
+        pos_num += num
+    pos_df = pd.DataFrame(positive_cases)
+
+    ideal_patches = {'file_name': [], 'label': []}
+    tp_patches = {'file_name': [], 'label': [], 'contour_key': []}
+    fp_patches = {'file_name': [], 'label': [], 'contour_key': []}
+    
+    if pos_num >0:
+        pl_contour_df = ND_zscore_filter(contour_df=pos_df, weight=[1, 1])  # z-score
+        # Filter keys where the sum of z-scores is greater than or equal to 0
+        pl_filtered_keys = pl_contour_df[pl_contour_df['zscore_sum'] >= 0]['contour_key'].to_list()
+
+    for patch in patches_in_regions:
+        contour_idx = patch['contour_idx']
+        file_name = patch['file_name']
+        patch_type = patch['type']  # 'tp' or 'fp'
+
+        if contour_idx in pl_filtered_keys:
+            ideal_patches['file_name'].append(file_name)
+            ideal_patches['label'].append(cl)
+
+            if patch_type == 'tp':
+                tp_patches['file_name'].append(file_name)
+                tp_patches['label'].append(cl)
+                tp_patches['contour_key'].append(contour_idx)
+            elif patch_type == 'fp':
+                fp_patches['file_name'].append(file_name)
+                fp_patches['label'].append(cl)
+                fp_patches['contour_key'].append(contour_idx)
+
+    else:
+        pl_contour_df = pos_df
+        print(f'NO {cl}')
+
+    return ideal_patches, tp_patches, fp_patches, pl_contour_df

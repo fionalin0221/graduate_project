@@ -27,7 +27,7 @@ from efficientnet_pytorch import EfficientNet
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
-torch.manual_seed(0)
+# torch.manual_seed(0)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -165,7 +165,7 @@ class Worker():
                     return True
         return False
     
-    def split_datas(self, selected_data, data_num):
+    def split_datas(self, selected_data, data_num, tp_data=None, fp_data=None):
         file_names = selected_data['file_name'].to_numpy()
         labels = selected_data['label'].to_numpy()        
         datas = []
@@ -173,6 +173,17 @@ class Worker():
         class_file_names = []
         for cl in self.classes:
             class_file_names.append(list(file_names[labels == cl]))
+
+        if self.gen_type:
+            tp_file_names = tp_data['file_name'].to_numpy()
+            tp_labels = tp_data['label'].to_numpy()
+            fp_file_names = fp_data['file_name'].to_numpy()
+            fp_labels = fp_data['label'].to_numpy()
+
+            tp_class_file_names, fp_class_file_names = [], []
+            for cl in self.classes:
+                tp_class_file_names.append(list(tp_file_names[tp_labels == cl]))
+                fp_class_file_names.append(list(fp_file_names[fp_labels == cl]))
         
         if data_num == "ALL":
             for num in range(len(self.classes)):
@@ -184,37 +195,89 @@ class Worker():
         else:
             data_num = int(data_num)
             for cl in range(len(self.classes)):
-                if len(class_file_names[cl]) > 0:
-                    class_data_num = int(data_num) if cl == 0 else int(data_num)
-                    class_samples = class_file_names[cl]
-                    
-                    if len(class_samples) >= class_data_num:
-                        samples = random.sample(class_samples, class_data_num)
-                        datas.append([(name, False) for name in samples])
+                if self.gen_type:
+                    fp_class_samples = fp_class_file_names[cl]
+                    tp_class_samples = tp_class_file_names[cl]
+
+                    if len(fp_class_samples) > 0:
+                        class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
+                        if len(fp_class_samples) >= class_data_num:
+                            samples = random.sample(fp_class_samples, class_data_num)
+                            datas.append([(name, False) for name in samples])
+                        else:
+                            if len(fp_class_samples) + len(tp_class_samples) >= class_data_num:
+                                datas.append([(name, False) for name in fp_class_samples])
+                                class_data_num -= len(fp_class_samples)
+                                samples = random.sample(tp_class_samples, class_data_num)
+                                datas.append([(name, False) for name in samples])
+                            else:
+                                temp_samples = fp_class_samples + tp_class_samples
+                                # Not enough samples, we need to augment
+                                n_missing = class_data_num - len(fp_class_samples) - len(tp_class_samples)
+                                duplicated = []
+
+                                # Repeat samples with random rotation
+                                for _ in range(n_missing):
+                                    chosen = random.choice(class_samples)
+                                    duplicated.append((chosen, True))  # (file_name, should_augment)
+
+                                # Store the original and augmented names
+                                augmented_list = [(name, False) for name in temp_samples] + duplicated
+                                datas.append(augmented_list)
+                            
                     else:
-                        # Not enough samples, we need to augment
-                        n_missing = class_data_num - len(class_samples)
-                        duplicated = []
+                        if len(tp_class_samples) > 0:
+                            class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
+                            if len(tp_class_samples) >= class_data_num:
+                                samples = random.sample(tp_class_samples, class_data_num)
+                                datas.append([(name, False) for name in samples])
+                            else:
+                                # Not enough samples, we need to augment
+                                n_missing = class_data_num - len(tp_class_samples)
+                                duplicated = []
 
-                        # Repeat samples with random rotation
-                        for _ in range(n_missing):
-                            chosen = random.choice(class_samples)
-                            duplicated.append((chosen, True))  # (file_name, should_augment)
+                                # Repeat samples with random rotation
+                                for _ in range(n_missing):
+                                    chosen = random.choice(class_samples)
+                                    duplicated.append((chosen, True))  # (file_name, should_augment)
 
-                        # Store the original and augmented names
-                        augmented_list = [(name, False) for name in class_samples] + duplicated
-                        datas.append(augmented_list)
-                    # version 2
-                    # class_data_num = int(data_num * 0.5) if cl == 0 else int(data_num)
-                    # datas.append(random.sample(class_file_names[cl], class_data_num))
-                    
-                    # version 1
-                    # if self.type == "Mix" and self.classes[num] == "N":
-                    #     datas.append(random.sample(class_file_names[num], int(data_num/2)))
-                    # else:
-                    #     datas.append(random.sample(class_file_names[num], int(data_num)))
+                                # Store the original and augmented names
+                                augmented_list = [(name, False) for name in tp_class_samples] + duplicated
+                                datas.append(augmented_list)
+                        else:
+                            datas.append([])
                 else:
-                    datas.append([])
+                    if len(class_file_names[cl]) > 0:
+                        class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
+                        class_samples = class_file_names[cl]
+                        
+                        if len(class_samples) >= class_data_num:
+                            samples = random.sample(class_samples, class_data_num)
+                            datas.append([(name, False) for name in samples])
+                        else:
+                            # Not enough samples, we need to augment
+                            n_missing = class_data_num - len(class_samples)
+                            duplicated = []
+
+                            # Repeat samples with random rotation
+                            for _ in range(n_missing):
+                                chosen = random.choice(class_samples)
+                                duplicated.append((chosen, True))  # (file_name, should_augment)
+
+                            # Store the original and augmented names
+                            augmented_list = [(name, False) for name in class_samples] + duplicated
+                            datas.append(augmented_list)
+                        # version 2
+                        # class_data_num = int(data_num * 0.5) if cl == 0 else int(data_num)
+                        # datas.append(random.sample(class_file_names[cl], class_data_num))
+                        
+                        # version 1
+                        # if self.type == "Mix" and self.classes[num] == "N":
+                        #     datas.append(random.sample(class_file_names[num], int(data_num/2)))
+                        # else:
+                        #     datas.append(random.sample(class_file_names[num], int(data_num)))
+                    else:
+                        datas.append([])
                 
         # if self.check_overlap(*datas):
         #     print(f'Data overlap.')
@@ -298,10 +361,7 @@ class Worker():
 
         if wsi == None:
             for h_wsi in self.hcc_old_wsis:
-                if self.gen_type:
-                    selected_data = pd.read_csv(f'{save_path}/{h_wsi}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
-                else:
-                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
+                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
                 h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
@@ -316,11 +376,7 @@ class Worker():
                 test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
             for h_wsi in self.hcc_wsis:
-                if self.gen_type:
-                    # selected_data = pd.read_csv(f'{save_path}/{h_wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
-                    selected_data = pd.read_csv(f'{save_path}/{h_wsi+91}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv')
-                else:
-                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
+                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
                 h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
@@ -335,10 +391,7 @@ class Worker():
                 test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
             for c_wsi in self.cc_wsis:
-                if self.gen_type:
-                    selected_data = pd.read_csv(f'{save_path}/1{c_wsi:04d}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
-                else:
-                    selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
+                selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
                 c_valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
@@ -360,9 +413,12 @@ class Worker():
             if self.state == "old":
                 if self.gen_type:
                     selected_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                    tp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
+                    fp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
-                Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                 valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                 test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
@@ -371,9 +427,12 @@ class Worker():
                 if self.gen_type:
                     # selected_data = pd.read_csv(f'{save_path}/{h_wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
                     selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv')
+                    tp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
+                    fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
-                Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
@@ -381,9 +440,12 @@ class Worker():
             elif self.type == "CC":
                 if self.gen_type:
                     selected_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                    tp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
+                    fp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                 else:
                     selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
-                Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
@@ -476,6 +538,7 @@ class Worker():
         # print(len(selected_patches['file_name']))
 
         region_data = {}
+        all_patches_in_regions = []
         for cl in self.classes:
             selected_patches, patches_in_regions, tp_in_regions, fp_in_regions = \
                 find_contours.find_contour(wsi, sorted_all_pts, self.state, cl, area_thresh, all_patches, selected_patches)
@@ -486,8 +549,11 @@ class Worker():
                 'fp_in_regions': fp_in_regions
             }
 
+            all_patches_in_regions.extend(region_data[cl]['patches_in_regions'])
+
         pd.DataFrame(selected_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv", index=False)
-        
+        pd.DataFrame(all_patches_in_regions).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_patches_in_regions_by_Gen{gen-1}.csv", index=False)
+
         # ideal_patches, pl_cancer_contour_df, pl_norm_contour_df = find_contours.zscore_filter(
         #     tp_in_cancer_regions,
         #     fp_in_cancer_regions,
@@ -499,6 +565,8 @@ class Worker():
         # )
 
         ideal_patches = {'file_name': [], 'label': []}
+        tp_patches = {'file_name': [], 'label': [], 'contour_key': []}
+        fp_patches = {'file_name': [], 'label': [], 'contour_key': []}
         pl_contour_dfs = {}
 
         for cl in self.classes:
@@ -508,20 +576,35 @@ class Worker():
             # neg_fp = pd.concat([region_data[c]['fp_in_regions'] for c in other_classes], ignore_index=True) # neg_fp can view as fn
             # neg_patches = pd.concat([region_data[c]['patches_in_regions'] for c in other_classes], ignore_index=True)
 
-            ideal, pos_df = find_contours.zscore_filter_multi_class(
+            # ideal, pos_df = find_contours.zscore_filter_multi_class(
+            #     data['tp_in_regions'],
+            #     data['fp_in_regions'],
+            #     data['patches_in_regions'],
+            #     cl
+            # )
+
+            ideal, tp_part, fp_part, pos_df = find_contours.zscore_filter_multi_class(
                 data['tp_in_regions'],
                 data['fp_in_regions'],
                 data['patches_in_regions'],
                 cl
             )
+
             ideal_patches['file_name'] += ideal['file_name']
             ideal_patches['label'] += ideal['label']
+
+            for key in tp_patches:  # 'file_name', 'label', 'contour_key'
+                tp_patches[key] += tp_part[key]
+                fp_patches[key] += fp_part[key]
+
             pl_contour_dfs[cl] = pos_df
 
         # pl_cancer_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tpfp_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
         # pl_norm_contour_df.to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_tnfn_ND_zscore_filtered_contour_by_Gen{gen-1}.csv")
-        print(pl_contour_dfs)
+
         pd.DataFrame(ideal_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv", index=False)
+        pd.DataFrame(tp_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv", index=False)
+        pd.DataFrame(fp_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv", index=False)
 
     class EfficientNetWithLinear(nn.Module):
         def __init__(self, output_dim, pretrain='efficientnet-b0'):
