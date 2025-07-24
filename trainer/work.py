@@ -195,6 +195,8 @@ class Worker():
         else:
             data_num = int(data_num)
             for cl in range(len(self.classes)):
+                class_samples = class_file_names[cl]
+
                 if self.gen_type:
                     fp_class_samples = fp_class_file_names[cl]
                     tp_class_samples = tp_class_file_names[cl]
@@ -202,18 +204,18 @@ class Worker():
                     if len(fp_class_samples) > 0:
                         class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
                         if len(fp_class_samples) >= class_data_num:
-                            samples = random.sample(fp_class_samples, class_data_num)
+                            samples = random.sample(fp_class_samples, int(class_data_num))
                             datas.append([(name, False) for name in samples])
                         else:
                             if len(fp_class_samples) + len(tp_class_samples) >= class_data_num:
                                 datas.append([(name, False) for name in fp_class_samples])
-                                class_data_num -= len(fp_class_samples)
+                                class_data_num = int(class_data_num - len(fp_class_samples))
                                 samples = random.sample(tp_class_samples, class_data_num)
                                 datas.append([(name, False) for name in samples])
                             else:
                                 temp_samples = fp_class_samples + tp_class_samples
                                 # Not enough samples, we need to augment
-                                n_missing = class_data_num - len(fp_class_samples) - len(tp_class_samples)
+                                n_missing = int(class_data_num - len(fp_class_samples) - len(tp_class_samples))
                                 duplicated = []
 
                                 # Repeat samples with random rotation
@@ -229,11 +231,11 @@ class Worker():
                         if len(tp_class_samples) > 0:
                             class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
                             if len(tp_class_samples) >= class_data_num:
-                                samples = random.sample(tp_class_samples, class_data_num)
+                                samples = random.sample(tp_class_samples, int(class_data_num))
                                 datas.append([(name, False) for name in samples])
                             else:
                                 # Not enough samples, we need to augment
-                                n_missing = class_data_num - len(tp_class_samples)
+                                n_missing = int(class_data_num - len(tp_class_samples))
                                 duplicated = []
 
                                 # Repeat samples with random rotation
@@ -249,14 +251,13 @@ class Worker():
                 else:
                     if len(class_file_names[cl]) > 0:
                         class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
-                        class_samples = class_file_names[cl]
                         
                         if len(class_samples) >= class_data_num:
-                            samples = random.sample(class_samples, class_data_num)
+                            samples = random.sample(class_samples, int(class_data_num))
                             datas.append([(name, False) for name in samples])
                         else:
                             # Not enough samples, we need to augment
-                            n_missing = class_data_num - len(class_samples)
+                            n_missing = int(class_data_num - len(class_samples))
                             duplicated = []
 
                             # Repeat samples with random rotation
@@ -425,8 +426,7 @@ class Worker():
             
             elif self.type == "HCC":
                 if self.gen_type:
-                    # selected_data = pd.read_csv(f'{save_path}/{h_wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
-                    selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv')
+                    selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
                     tp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
                     fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
@@ -450,22 +450,39 @@ class Worker():
                 valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
             else:
-                if self.test_type == "HCC":
+                if self.test_state == "old":
                     if self.gen_type:
-                        # selected_data = pd.read_csv(f'{save_path}/{h_wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
-                        selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv')
+                        selected_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                        tp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
+                        fp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
+                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
+                    else:
+                        selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
+                        Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                    test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
+                elif self.test_type == "HCC":
+                    if self.gen_type:
+                        selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                        tp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
+                        fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
+                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
-                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                        Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
                 else:
                     if self.gen_type:
                         selected_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}.csv')
+                        tp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_tp_patches_by_Gen{gen-1}.csv')
+                        fp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
+                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                     else:
                         selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
-                    Train, Valid, Test = self.split_datas(selected_data, self.data_num)
+                        Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
@@ -540,8 +557,9 @@ class Worker():
         region_data = {}
         all_patches_in_regions = []
         for cl in self.classes:
+            print(f"running for {cl} contours ...")
             selected_patches, patches_in_regions, tp_in_regions, fp_in_regions = \
-                find_contours.find_contour(wsi, sorted_all_pts, self.state, cl, area_thresh, all_patches, selected_patches)
+                find_contours.find_contour_new(wsi, sorted_all_pts, self.state, cl, area_thresh, all_patches, selected_patches)
             
             region_data[cl] = {
                 'patches_in_regions': patches_in_regions,
@@ -583,7 +601,7 @@ class Worker():
             #     cl
             # )
 
-            ideal, tp_part, fp_part, pos_df = find_contours.zscore_filter_multi_class(
+            ideal, tp_part, fp_part, pos_df = find_contours.zscore_filter_multi_class_new(
                 data['tp_in_regions'],
                 data['fp_in_regions'],
                 data['patches_in_regions'],
@@ -927,7 +945,7 @@ class Worker():
         elif self.test_type == "CC":
             _wsi = f"1{wsi:04d}"
 
-        save_path = f'{self.save_dir}/{_wsi}/trial_{self.num_trial}'
+        save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -935,9 +953,9 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        for gen in range(1, self.generation):
-            # condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
-            condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
+        for gen in range(2, self.generation):
+            condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
+            # condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
             print(condition)
 
             self.test_TATI(wsi, gen-1, save_path)
@@ -951,13 +969,16 @@ class Worker():
         
             # Model setting and transfer learning or not
             model = self.EfficientNetWithLinear(output_dim = self.class_num)
+            if gen > 1:
+                model_path = f"Gen{gen-1}_ND_zscore_ideal_patches_by_Gen{gen-2}_1WTC.ckpt"
+                model.load_state_dict(torch.load(model_path))
             model.to(device)
             modelName = f"{condition}_1WTC.ckpt"
 
             criterion = nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-            min_epoch = 2
+            min_epoch = 5
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=min_epoch)
 
@@ -1156,8 +1177,8 @@ class Worker():
                     model = EfficientNet.from_name('efficientnet-b0')
                     model._fc= nn.Linear(1280, 2)
             else:
-                # condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
-                condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
+                condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
+                # condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
                 model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
                 model = self.EfficientNetWithLinear(output_dim = self.class_num)
 

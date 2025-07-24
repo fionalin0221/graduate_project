@@ -175,7 +175,7 @@ def find_contour_new(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, s
     regions_hulls = contours_processing(hulls, forImage=False)
 
     ### Select data in regions ###
-    for pts in tqdm(sorted_all_pts):
+    for pts in sorted_all_pts:
         ptx, pty, pseudo_label = pts[0], pts[1], pts[2]
         left_up = [int(ptx), int(pty)]
         # right_up = [int(ptx) + 1, int(pty)]
@@ -331,6 +331,9 @@ def zscore_filter_multi_class_new(tp_in_regions, fp_in_regions, patches_in_regio
         pl_contour_df = ND_zscore_filter(contour_df=pos_df, weight=[1, 1])  # z-score
         # Filter keys where the sum of z-scores is greater than or equal to 0
         pl_filtered_keys = pl_contour_df[pl_contour_df['zscore_sum'] >= 0]['contour_key'].to_list()
+    else:
+        pl_contour_df = pos_df
+        print(f'NO {cl}')
 
     for patch in patches_in_regions:
         contour_idx = patch['contour_idx']
@@ -349,9 +352,5 @@ def zscore_filter_multi_class_new(tp_in_regions, fp_in_regions, patches_in_regio
                 fp_patches['file_name'].append(file_name)
                 fp_patches['label'].append(cl)
                 fp_patches['contour_key'].append(contour_idx)
-
-    else:
-        pl_contour_df = pos_df
-        print(f'NO {cl}')
 
     return ideal_patches, tp_patches, fp_patches, pl_contour_df
