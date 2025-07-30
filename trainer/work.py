@@ -204,15 +204,19 @@ class Worker():
                     if len(fp_class_samples) > 0:
                         class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
                         if len(fp_class_samples) >= class_data_num:
+                            print(f"{cl} is case 0")
                             samples = random.sample(fp_class_samples, int(class_data_num))
                             datas.append([(name, False) for name in samples])
                         else:
                             if len(fp_class_samples) + len(tp_class_samples) >= class_data_num:
-                                datas.append([(name, False) for name in fp_class_samples])
+                                print(f"{cl} is case 1")
+                                # datas.append([(name, False) for name in fp_class_samples])
                                 class_data_num = int(class_data_num - len(fp_class_samples))
                                 samples = random.sample(tp_class_samples, class_data_num)
-                                datas.append([(name, False) for name in samples])
+                                full_samples = [(name, False) for name in fp_class_samples] + [(name, False) for name in samples]
+                                datas.append(full_samples)
                             else:
+                                print(f"{cl} is case 2")
                                 temp_samples = fp_class_samples + tp_class_samples
                                 # Not enough samples, we need to augment
                                 n_missing = int(class_data_num - len(fp_class_samples) - len(tp_class_samples))
@@ -231,9 +235,11 @@ class Worker():
                         if len(tp_class_samples) > 0:
                             class_data_num = 0.5 * int(data_num) if cl == 0 else int(data_num)
                             if len(tp_class_samples) >= class_data_num:
+                                # print(f"{cl} is case 3")
                                 samples = random.sample(tp_class_samples, int(class_data_num))
                                 datas.append([(name, False) for name in samples])
                             else:
+                                # print(f"{cl} is case 4")
                                 # Not enough samples, we need to augment
                                 n_missing = int(class_data_num - len(tp_class_samples))
                                 duplicated = []
@@ -247,6 +253,7 @@ class Worker():
                                 augmented_list = [(name, False) for name in tp_class_samples] + duplicated
                                 datas.append(augmented_list)
                         else:
+                            # print(f"{cl} is case 5")
                             datas.append([])
                 else:
                     if len(class_file_names[cl]) > 0:
@@ -514,8 +521,8 @@ class Worker():
         if gen == 1:
             df = pd.read_csv(f"{save_path}/TI/{_wsi}_{self.class_num}_class_patch_in_region_filter_2_v2_TI.csv")
         else:
-            df = pd.read_csv(f"{save_path}/TI/{_wsi}_Gen{gen-1}_ND_zscore_selected_patches_by_Gen{gen-2}_patch_in_region_filter_2_v2_TI.csv")
-            # df = pd.read_csv(f"{save_path}/TI/{_wsi}_Gen{gen-1}_ND_zscore_ideal_patches_by_Gen{gen-2}_patch_in_region_filter_2_v2_TI.csv")
+            # df = pd.read_csv(f"{save_path}/TI/{_wsi}_Gen{gen-1}_ND_zscore_selected_patches_by_Gen{gen-2}_patch_in_region_filter_2_v2_TI.csv")
+            df = pd.read_csv(f"{save_path}/TI/{_wsi}_Gen{gen-1}_ND_zscore_ideal_patches_by_Gen{gen-2}_patch_in_region_filter_2_v2_TI.csv")
 
         all_patches = df['file_name'].to_list()
         selected_columns = []
@@ -953,7 +960,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        for gen in range(2, self.generation):
+        for gen in range(1, self.generation):
             condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
             # condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
             print(condition)
@@ -970,7 +977,7 @@ class Worker():
             # Model setting and transfer learning or not
             model = self.EfficientNetWithLinear(output_dim = self.class_num)
             if gen > 1:
-                model_path = f"Gen{gen-1}_ND_zscore_ideal_patches_by_Gen{gen-2}_1WTC.ckpt"
+                model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_ideal_patches_by_Gen{gen-2}_1WTC.ckpt"
                 model.load_state_dict(torch.load(model_path))
             model.to(device)
             modelName = f"{condition}_1WTC.ckpt"
@@ -1166,7 +1173,7 @@ class Worker():
         
         if self.gen_type:
             if save_path == None:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
             if gen == 0:
                 condition = f'{self.class_num}_class'
                 if self.test_model == "3_class_100WTC":
@@ -1247,11 +1254,11 @@ class Worker():
             _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
             __wsi = wsi if self.state == "old" else (wsi+91 if self.type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
-            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
-                condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
+                condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             if self.test_model == "self":
@@ -1350,7 +1357,7 @@ class Worker():
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
-                condition = f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}"
+                condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             save_dir = os.path.join(self.file_paths[f'{self.type}_{self.num_wsi}WTC_model_path'], f"LP_{self.data_num}/trial_{self.num_trial}") 
