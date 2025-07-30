@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 
 # save_offsets.py
 def extract_offsets(csv_path):
@@ -39,35 +40,41 @@ def extract_offsets(csv_path):
     return offsets
 
 # 設定資料夾與 offset
-base_dir = "/workspace/Data/Datas/temp/5"
-offsets = extract_offsets("/workspace/Data/Datas/18-42041A2.csv")
+wsis = list(range(27, 92))
+for wsi in wsis:
+    offsets = extract_offsets(f"/workspace/Data/Datas/CSV/{wsi}.csv")
 
-for label, (x_offset, y_offset) in offsets.items():
-    folder = os.path.join(base_dir, label)
-    if not os.path.exists(folder):
-        print(f"Folder not exist: {folder}")
-        continue
+    for label, (x_offset, y_offset) in offsets.items():
+        src_folder = f"/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced/{wsi}/{label}"
+        dst_folder = f"/workspace/Data/Datas/temp/{wsi}/{label}"
 
-    for fname in os.listdir(folder):
-        if not fname.endswith(".tif"):
+        os.makedirs(dst_folder, exist_ok=True)
+
+        if not os.path.exists(src_folder):
+            print(f"Folder not exist: {src_folder}")
             continue
 
-        match = re.match(rf"{label}-(\d+)-(\d+)-", fname)
-        if not match:
-            print(f"Cannot extract: {fname}")
-            continue
+        for fname in os.listdir(src_folder):
+            if not fname.endswith(".tif"):
+                continue
 
-        x_local = int(match.group(1))
-        y_local = int(match.group(2))
-        x_global = x_offset + x_local
-        y_global = y_offset + y_local
+            match = re.match(rf"{label}-(\d+)-(\d+)-", fname)
+            if not match:
+                print(f"Cannot extract: {fname}")
+                continue
 
-        new_name = f"{x_global}_{y_global}.tif"
-        src = os.path.join(folder, fname)
-        dst = os.path.join(folder, new_name)
+            x_local = int(match.group(1))
+            y_local = int(match.group(2))
+            x_global = x_offset + x_local
+            y_global = y_offset + y_local
 
-        try:
-            os.rename(src, dst)
-            print(f"{fname} → {new_name}")
-        except Exception as e:
-            print(f"Cannot rename {fname}: {e}")
+            new_name = f"{x_global}_{y_global}.tif"
+            src = os.path.join(src_folder, fname)
+            dst = os.path.join(dst_folder, new_name)
+
+            try:
+                # os.rename(src, dst)
+                shutil.copy2(src, dst)
+                print(f"{fname} → {new_name}")
+            except Exception as e:
+                print(f"Cannot rename {fname}: {e}")
