@@ -44,6 +44,7 @@ def save_patch(width, height, wsi_openslide, patches_save_path):
         img = np.array(wsi_openslide.read_region((width, height), 0, (448, 448)))
         # Convert using OpenCV for faster processing
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         # Save the patch
         save_path = f"{patches_save_path}/{width}_{height}.tif"
         cv2.imwrite(save_path, img)

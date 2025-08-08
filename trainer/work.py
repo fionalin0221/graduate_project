@@ -425,7 +425,7 @@ class Worker():
                     fp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                 else:
-                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
+                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_{self.class_num}_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                 valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
@@ -438,7 +438,7 @@ class Worker():
                     fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                 else:
-                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
+                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_{self.class_num}_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
@@ -451,7 +451,7 @@ class Worker():
                     fp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                 else:
-                    selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
+                    selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_{self.class_num}_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
@@ -464,7 +464,7 @@ class Worker():
                         fp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                     else:
-                        selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
+                        selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_{self.class_num}_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
@@ -476,7 +476,7 @@ class Worker():
                         fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                     else:
-                        selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
+                        selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_{self.class_num}_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
@@ -488,7 +488,7 @@ class Worker():
                         fp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_ideal_fp_patches_by_Gen{gen-1}.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
                     else:
-                        selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
+                        selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_{self.class_num}_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
@@ -842,9 +842,9 @@ class Worker():
         elif self.type == "CC":
             _wsi = f"1{wsi:04d}"
 
-        save_path = f"{self.save_path}/{wsi}/trial_{self.num_trial}"
+        save_path = f"{self.save_path}/{_wsi}/trial_{self.num_trial}"
         condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-        print(f"WSI {wsi} | {condition}")
+        print(f"WSI {_wsi} | {condition}")
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1091,13 +1091,13 @@ class Worker():
         
         test_data = []
         if self.state == "old":
-            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_{self.class_num}_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
         elif self.type == "HCC":
-            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_{self.class_num}_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
         elif self.type == "CC":
-            data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_{self.class_num}_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
 
         print(f"testing data number: {len(test_dataset)}")
@@ -1107,7 +1107,7 @@ class Worker():
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_path}/Model/{modelName}"
 
-            model = self.EfficientNetWithLinear(output_dim = 2)
+            model = self.EfficientNetWithLinear(output_dim = self.class_num)
             model.load_state_dict(torch.load(model_path))
             model.to(device)
 
@@ -1262,7 +1262,7 @@ class Worker():
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             if self.test_model == "self":
-                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{wsi}"
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
                 save_path = save_dir
             else:
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
@@ -1309,34 +1309,61 @@ class Worker():
         for x, y, label in all_pts:
             image[y, x] = label
 
-        color_map = {
-            1: 'green',     # 正確 Normal
-            2: 'red',       # 正確 HCC
-            3: 'blue',      # 正確 CC
-            12: 'orange',   # Normal -> HCC
-            13: 'yellow',   # Normal -> CC
-            21: 'cyan',     # HCC -> Normal
-            23: 'magenta',  # HCC -> CC
-            31: 'purple',   # CC -> Normal
-            32: 'brown'     # CC -> HCC
-        }
+        if self.class_num == 3:
+            color_map = {
+                1: 'green',     # 正確 Normal
+                2: 'red',       # 正確 HCC
+                3: 'blue',      # 正確 CC
+                12: 'orange',   # Normal -> HCC
+                13: 'yellow',   # Normal -> CC
+                21: 'cyan',     # HCC -> Normal
+                23: 'magenta',  # HCC -> CC
+                31: 'purple',   # CC -> Normal
+                32: 'brown'     # CC -> HCC
+            }
 
-        legend_elements = [
-            plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
-            plt.Line2D([0], [0], color='red', lw=4, label='True HCC'),
-            plt.Line2D([0], [0], color='blue', lw=4, label='True CC'),
-            plt.Line2D([0], [0], color='orange', lw=4, label='Normal -> HCC'),
-            plt.Line2D([0], [0], color='yellow', lw=4, label='Normal -> CC'),
-            plt.Line2D([0], [0], color='cyan', lw=4, label='HCC -> Normal'),
-            plt.Line2D([0], [0], color='magenta', lw=4, label='HCC -> CC'),
-            plt.Line2D([0], [0], color='purple', lw=4, label='CC -> Normal'),
-            plt.Line2D([0], [0], color='brown', lw=4, label='CC -> HCC')
-        ]
-
+            legend_elements = [
+                plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
+                plt.Line2D([0], [0], color='red', lw=4, label='True HCC'),
+                plt.Line2D([0], [0], color='blue', lw=4, label='True CC'),
+                plt.Line2D([0], [0], color='orange', lw=4, label='Normal -> HCC'),
+                plt.Line2D([0], [0], color='yellow', lw=4, label='Normal -> CC'),
+                plt.Line2D([0], [0], color='cyan', lw=4, label='HCC -> Normal'),
+                plt.Line2D([0], [0], color='magenta', lw=4, label='HCC -> CC'),
+                plt.Line2D([0], [0], color='purple', lw=4, label='CC -> Normal'),
+                plt.Line2D([0], [0], color='brown', lw=4, label='CC -> HCC')
+            ]
+        elif self.class_num == 2:
+            if self.test_type == "HCC":
+                color_map = {
+                    1: 'green',     # True Normal
+                    2: 'red',       # True HCC
+                    12: 'orange',   # Normal -> HCC
+                    21: 'cyan',     # HCC -> Normal
+                }
+                legend_elements = [
+                    plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
+                    plt.Line2D([0], [0], color='red', lw=4, label='True HCC'),
+                    plt.Line2D([0], [0], color='orange', lw=4, label='Normal -> HCC'),
+                    plt.Line2D([0], [0], color='cyan', lw=4, label='HCC -> Normal'),
+                ]
+            elif self.test_type == "CC":
+                color_map = {
+                    1: 'green',     # True Normal
+                    2: 'blue',      # True CC
+                    12: 'yellow',   # Normal -> CC
+                    21: 'purple',   # CC -> Normal
+                }
+                legend_elements = [
+                    plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
+                    plt.Line2D([0], [0], color='blue', lw=4, label='True CC'),
+                    plt.Line2D([0], [0], color='yellow', lw=4, label='Normal -> CC'),
+                    plt.Line2D([0], [0], color='purple', lw=4, label='CC -> Normal'),
+                ]
         plt.figure(figsize=(x_max // 20, y_max // 20))
         for label_value, color in color_map.items():
             plt.imshow(image == label_value, cmap=ListedColormap([[1,1,1,0], color]), interpolation='nearest', alpha=0.5)
-        
+
         # plt.imshow(image, cmap=cmap, interpolation='nearest')
         plt.title(f"Prediction vs Ground Truth of WSI {__wsi}", fontsize=20, pad=20)
         plt.legend(handles=legend_elements, loc='upper right')

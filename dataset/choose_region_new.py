@@ -58,14 +58,6 @@ def check_patch_condition(image_path):
     end_read_img = time.time()
     # print(f"read img time: {end_read_img-start_read_img}")
 
-    # start_color_mean = time.time()
-    # blue_mean = np.mean(img[:, :, 2])
-    # red_mean = np.mean(img[:, :, 0])
-    # if blue_mean <= 200 and red_mean <= 180:
-    #     return 1
-    # end_color_mean = time.time()
-    # print(f"count color mean time: {end_color_mean-start_color_mean}")
-
     start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if np.mean(gray_image) >= 250:  #white
@@ -98,11 +90,11 @@ def process_image(f, patches_path, all_region, classes):
     left_down = [int(fx), int(fy) + 448]
     right_down = [int(fx) + 448, int(fy) + 448]
 
-    for k, v in all_region.items():
-        if k[0] in classes:
-            region = np.array(v)
+    for label_name, region in all_region.items():
+        if label_name in classes:
+            region = np.array(region)
             if all(Point_in_Region(pt, region) for pt in [left_up, right_up, left_down, right_down]):
-                return f, k[0]
+                return f, label_name
 
     return None
 
@@ -111,47 +103,55 @@ with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 current_computer = config['current_computer']
-type = config['type']
+cancer_type = config['type']
 state = config['state']
 file_paths = config['computers'][current_computer]['file_paths']
 class_list = config["class_list"]
 classes = [class_list[i] for i in file_paths['classes']]
 print(classes)
 
-wsis = file_paths[f'{type}_wsis']
+wsis = file_paths[f'{cancer_type}_wsis']
 for wsi in wsis:
-    print(f'{type} WSI : ', wsi)
-    if type == "HCC":
-        xml_name = "LIVER_{:05d}.xml".format(wsi)
+    print(f'{cancer_type} WSI : ', wsi)
+    if cancer_type == "HCC":
+        if len(classes) == 2:
+            xml_name = "LIVER_{:05d}.xml".format(wsi)
+        elif len(classes) == 3:
+            xml_name = "LIVER_{:05d}_3.xml".format(wsi)
         tree = ET.parse(os.path.join(file_paths[f'HCC_{state}_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
-    elif type == "CC":
-        xml_name = "LIVER_1{:04d}.xml".format(wsi)
+    elif cancer_type == "CC":
+        if len(classes) == 2:
+            xml_name = "LIVER_1{:04d}.xml".format(wsi)
+        elif len(classes) == 3:
+            xml_name = "LIVER_1{:04d}_3.xml".format(wsi)
         tree = ET.parse(os.path.join(file_paths['CC_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
+    print(xml_name)
     root = tree.getroot()
 
     all_region = {}
     for child in root.iter():
         # print(child.tag, child.attrib)
         if child.tag == 'Region':
-            label_id = child.attrib['Text'] + child.attrib['Id']
-            all_region[label_id] = []
+            current_label = child.attrib['Text']
+            all_region[current_label] = []
         if child.tag == 'Vertex':
             x = int(float(child.attrib['X']))
             y = int(float(child.attrib['Y']))
-            all_region[label_id].append((x, y))
-    if type == "HCC":
+            all_region[current_label].append((x, y))
+    
+    if cancer_type == "HCC":
         csv_dir = os.path.join(file_paths['HCC_csv_dir'],f"{wsi+91}")
-    elif type == "CC":
+    elif cancer_type == "CC":
         csv_dir = os.path.join(file_paths['CC_csv_dir'],f"{wsi}")
     os.makedirs(csv_dir, exist_ok=True)
 
     data_info = {"file_name": [], "label": []}
     nums = [0] * len(classes)
 
-    if type == "HCC":
-        patches_path = os.path.join(file_paths[f'{type}_{state}_patches_save_path'],f"{wsi}")
+    if cancer_type == "HCC":
+        patches_path = os.path.join(file_paths[f'{cancer_type}_{state}_patches_save_path'],f"{wsi}")
     else:
-        patches_path = os.path.join(file_paths[f'{type}_patches_save_path'],f"{wsi}")
+        patches_path = os.path.join(file_paths[f'{cancer_type}_patches_save_path'],f"{wsi}")
     if not os.path.exists(patches_path):
         print(f"Skipping: {patches_path} not found")
         continue
@@ -170,8 +170,11 @@ for wsi in wsis:
 
 
     df = pd.DataFrame(data_info)
-    if type == "HCC":
+    if cancer_type == "HCC":
         df.to_csv(os.path.join(csv_dir, f'{wsi+91}_patch_in_region_filter_{len(classes)}_v2.csv'), index=False)
-    elif type == "CC":
+    elif cancer_type == "CC":
         df.to_csv(os.path.join(csv_dir, f'1{wsi:04d}_patch_in_region_filter_{len(classes)}_v2.csv'), index=False)
-    print(nums[0], nums[1])
+    if len(classes) == 2:
+        print(nums[0], nums[1])
+    elif len(classes) == 3:
+        print(nums[0], nums[1], nums[2])

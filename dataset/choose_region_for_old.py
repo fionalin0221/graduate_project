@@ -88,7 +88,15 @@ for wsi in wsis:
                     data_info['label'].append(label)
                     nums[classes.index(label)] += 1
 
+    old_dir = os.path.join(csv_dir, 'old')
+    os.makedirs(old_dir, exist_ok=True)
+
+    csv_path = os.path.join(csv_dir, f'{wsi}_patch_in_region_filter_{len(classes)}_v2.csv') 
+
+    if os.path.exists(csv_path):
+        old_csv_path = os.path.join(old_dir, os.path.basename(csv_path))
+        os.rename(csv_path, old_csv_path)
 
     df = pd.DataFrame(data_info)
-    df.to_csv(os.path.join(csv_dir, f'{wsi}_patch_in_region_filter_{len(classes)}_v2.csv'), index=False)
+    df.to_csv(csv_path, index=False)
     print(nums[0], nums[1])
