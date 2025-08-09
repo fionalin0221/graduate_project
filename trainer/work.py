@@ -294,8 +294,10 @@ class Worker():
         data_file_names, data_labels = [], []
 
         for i in range(self.class_num):
-            data_file_names += class_file_names[i]
-            data_labels += [self.classes[i]] * len(class_file_names[i])
+            # data_file_names += class_file_names[i]
+            # data_labels += [self.classes[i]] * len(class_file_names[i])
+            data_file_names += [x[0] for x in datas[i]]
+            data_labels += [self.classes[i]] * len(datas[i])
 
         # Prepare train/val dataset
         train, val, test = [], [], []
@@ -369,7 +371,7 @@ class Worker():
 
         if wsi == None:
             for h_wsi in self.hcc_old_wsis:
-                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
+                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_{self.class_num}_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
                 h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
@@ -384,7 +386,7 @@ class Worker():
                 test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
             for h_wsi in self.hcc_wsis:
-                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
+                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_{self.class_num}_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
                 h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
@@ -399,7 +401,7 @@ class Worker():
                 test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
             for c_wsi in self.cc_wsis:
-                selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
+                selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_{self.class_num}_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
                 c_valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
