@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+from tqdm import tqdm
 
 # save_offsets.py
 def extract_offsets(csv_path):
@@ -40,12 +41,14 @@ def extract_offsets(csv_path):
     return offsets
 
 # 設定資料夾與 offset
-wsis = list(range(27, 92))
-for wsi in wsis:
-    offsets = extract_offsets(f"/workspace/Data/Datas/CSV/{wsi}.csv")
+wsis = list(range(6, 27))
 
+for wsi in wsis:
+    print(f"Processing {wsi}...")
+    offsets = extract_offsets(f"/workspace/Data/Datas/CSV/{wsi}.csv")
     for label, (x_offset, y_offset) in offsets.items():
-        src_folder = f"/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced/{wsi}/{label}"
+        # src_folder = f"/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced/{wsi}/{label}"
+        src_folder = f"/workspace/Data/Datas/temp/{wsi}/{label}"
         dst_folder = f"/workspace/Data/Datas/temp/{wsi}/{label}"
 
         os.makedirs(dst_folder, exist_ok=True)
@@ -54,7 +57,7 @@ for wsi in wsis:
             print(f"Folder not exist: {src_folder}")
             continue
 
-        for fname in os.listdir(src_folder):
+        for fname in tqdm(os.listdir(src_folder)):
             if not fname.endswith(".tif"):
                 continue
 
@@ -73,8 +76,8 @@ for wsi in wsis:
             dst = os.path.join(dst_folder, new_name)
 
             try:
-                # os.rename(src, dst)
-                shutil.copy2(src, dst)
-                print(f"{fname} → {new_name}")
+                os.rename(src, dst)
+                # shutil.copy2(src, dst)
+                # print(f"{fname} → {new_name}")
             except Exception as e:
                 print(f"Cannot rename {fname}: {e}")

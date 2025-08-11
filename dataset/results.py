@@ -2,19 +2,19 @@ import os
 import pandas as pd
 
 # Define paths
-result_type = "Mix"
-num_wsi = 40
+result_type = "HCC"
+num_wsi = 1
 data_num = 6400
-cl = "C"
-num_trial = 3
-gen = 5
+cl = "NC"
+num_trial = 1
+gen = None
 
-# base_path = "/workspace/Data/Results/Mix_NDPI/10WTC_Result/LP_6400"
-# output_file = "/workspace/Data/Results/Mix_NDPI/10WTC_Result/LP_6400/trial_3_cc_tani_results.csv"
+base_path = f"/workspace/Data/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
+output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_{cl}_results.csv"
 # base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-# output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_{cl}_tani_results.csv"
-base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
-output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_{cl}_generation_results.csv"
+# output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_{cl}_results.csv"
+# base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+# output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_{cl}_generation_results.csv"
 
 # Define trials and WSIs
 # Old CC 40WTC
@@ -22,7 +22,8 @@ output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_{cl}_gen
 # wsi_list = [3, 41, 71, 91, 123, 135,177, 192, 207, 222]
 # New CC 40WTC
 # wsi_list = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 175, 178, 191, 202]
-wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
+# wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
+wsi_list = [195, 275, 298, 314]
 
 # HCC 10WTC
 # wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
@@ -58,14 +59,14 @@ results = []
 
 # Iterate through trials and WSIs
 for _wsi in wsi_list:
-    if cl == "H":
+    if result_type == "HCC":
         wsi = _wsi
     else:
         wsi = f"1{_wsi:04d}"
     
     if not gen:
         # file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_2_class_trial_{num_trial}_test_result.csv"
-        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_1WTC_LP3200_2_class_trial_{num_trial}_test_result_new.csv"
+        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_1WTC_LP{data_num}_3_class_trial_{num_trial}_test_result.csv"
         results = add_results(file_path, cl, wsi, num_trial, results)
 
     else:

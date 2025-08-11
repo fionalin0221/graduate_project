@@ -659,7 +659,7 @@ class Worker():
             
             return output
 
-    def plot_loss_acc(self, train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, save_path):
+    def plot_loss_acc(self, train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, save_path, condition):
         epochs = range(1, len(train_loss_list) + 1)
         fig, ax1 = plt.subplots(figsize=(8, 6))
 
@@ -681,7 +681,7 @@ class Worker():
         ax1.legend(lines, labels, loc="upper left")
 
         plt.title("Train vs Valid Loss & Accuracy")
-        plt.savefig(f"{save_path}/loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
+        plt.savefig(f"{save_path}/{condition}_loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
     
     def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class, min_epoch = 20):
         n_epochs = 100
@@ -831,10 +831,10 @@ class Worker():
             if epoch == min_epoch:
                 notImprove = 0
             if notImprove >= 2 and epoch >= min_epoch:
-                self.plot_loss_acc(train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, loss_save_path)
+                self.plot_loss_acc(train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, loss_save_path, condition)
                 return
 
-        self.plot_loss_acc(train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, loss_save_path)
+        self.plot_loss_acc(train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, loss_save_path, condition)
 
     def train_one_WSI(self, wsi):
         if self.state == "old":
@@ -943,10 +943,6 @@ class Worker():
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
 
     def train_generation(self, wsi):
-        # wsis = {"HCC": self.hcc_wsis, "CC": self.cc_wsis}.get(self.type)
-
-        # wsi = wsis[0]
-        # _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
         if self.test_state == "old":
             _wsi = wsi
         elif self.test_type == "HCC":
@@ -979,8 +975,10 @@ class Worker():
             # Model setting and transfer learning or not
             model = self.EfficientNetWithLinear(output_dim = self.class_num)
             if gen > 1:
+                model_path = self.file_paths['100WTC_model_path']
+            else:
                 model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_ideal_patches_by_Gen{gen-2}_1WTC.ckpt"
-                model.load_state_dict(torch.load(model_path))
+            model.load_state_dict(torch.load(model_path, weights_only=True))
             model.to(device)
             modelName = f"{condition}_1WTC.ckpt"
 
@@ -1207,7 +1205,7 @@ class Worker():
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
         # Prepare Model
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path, weights_only = True))
         model.to(device)
         Sigmoid = nn.Sigmoid()
 
@@ -1253,8 +1251,8 @@ class Worker():
 
     def plot_TI_Result(self, wsi, gen, save_path):
         if save_path == None:
-            _wsi = wsi+91 if (self.state == "new" and self.type == "HCC") else wsi
-            __wsi = wsi if self.state == "old" else (wsi+91 if self.type == "HCC" else f"1{wsi:04d}")
+            _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
+            __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
             save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
             if gen == 0:
