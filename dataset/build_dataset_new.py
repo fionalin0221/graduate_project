@@ -46,8 +46,13 @@ def check_patch_condition(image_path):
     return 0
 
 def process_files(file_list, folder):
+    def wapper(f):
+        full_path = os.path.join(folder, f)
+        result =  check_patch_condition(full_path)
+        return f if result == 0 else None
+
     with ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(tqdm(executor.map(check_patch_condition, [os.path.join(folder, f) for f in file_list]), 
+        results = list(tqdm(executor.map(wapper, file_list), 
                             total=len(file_list), desc="Processing patches", leave=False))
     return [result for result in results if result is not None]
 
