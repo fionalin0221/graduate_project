@@ -127,69 +127,127 @@
 # plt.savefig(f"{base_folder}/C_avg_gray_histogram.png", dpi=300)
 # plt.close()  # 關閉當前圖表
 
-import numpy as np
+# import numpy as np
+# import pandas as pd
+# import matplotlib.pyplot as plt
+# from matplotlib.colors import ListedColormap
+# from sklearn.metrics import confusion_matrix
+
+# all_labels = []
+# all_preds = []
+
+# save_dir = "/workspace/Data/Results/Mix_NDPI/10WTC_Result/LP_6400/trial_2"
+
+# wsis =  [6, 11, 39, 52, 144]
+
+# label_dict = {"N": 0, "H": 1, "C": 2}
+
+# for _wsi in wsis:
+#     # wsi = _wsi
+#     wsi = f"1{_wsi:04d}"
+#     save_path = f"{save_dir}/{wsi}"
+#     condition = f"{wsi}_10WTC_LP6400_3_class_trial_2" 
+#     df = pd.read_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv")
+#     labels = df['true_label'].to_list()
+#     preds = df['pred_label'].to_list()
+#     for label, pred in zip(labels, preds):
+#         all_labels.append(label_dict[label])
+#         all_preds.append(label_dict[pred])
+
+# # 把你的原資料複製一份
+# all_labels_fixed = np.array(all_labels).tolist()
+# all_preds_fixed = np.array(all_preds).tolist()
+
+# # 人為加上每一個 label 的假樣本（預設 prediction 也設成自己）
+# for label in [0, 1, 2]:
+#     all_labels_fixed.append(label)
+#     all_preds_fixed.append(label)
+
+# # 計算 confusion matrix
+# cm = confusion_matrix(all_labels_fixed, all_preds_fixed, labels=[0, 1, 2])
+
+# # 最後把加的那個 fake 样本在 cm 中扣掉 (每個 fake 樣本只增加 1 到對角線)
+# cm = cm - np.eye(3, dtype=int)
+
+# condition = "CC_tani_trial_2"
+# # cm = confusion_matrix(all_labels, all_preds, labels=[0, 1, 2])
+
+# fig, ax = plt.subplots(figsize=(8, 6))
+# cax = ax.matshow(cm, cmap='Blues')
+# fig.colorbar(cax)
+
+# ax.set_xticks(np.arange(3))
+# ax.set_yticks(np.arange(3))
+# ax.set_xticklabels(["N", "H", "C"], fontsize=14)
+# ax.set_yticklabels(["N", "H", "C"], fontsize=14)
+
+# for i in range(cm.shape[0]):
+#     for j in range(cm.shape[1]):
+#         color = "white" if cm[i, j] > cm.max() / 2 else "black"
+#         ax.text(j, i, format(cm[i, j], 'd'), ha="center", va="center", color=color, fontsize=18)
+
+# title = f"Confusion Matrix of {condition}"
+# plt.title(title, fontsize=20, pad=20)
+# ax.set_xlabel('Predicted Label', fontsize=16, labelpad=10)
+# ax.set_ylabel('True Label', fontsize=16, labelpad=10)
+
+# plt.subplots_adjust(top=0.85)
+# plt.savefig(f"{save_dir}/Metric/{condition}_confusion_matrix.png")
+
+
+import os
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix
 
-all_labels = []
-all_preds = []
+classes = ["N", "H", "C"]
+invalid_idx = len(classes)
+classes_with_invalid = classes + ["Invalid"]
 
-save_dir = "/workspace/Data/Results/Mix_NDPI/10WTC_Result/LP_6400/trial_2"
 
-wsis =  [6, 11, 39, 52, 144]
+base_path = "/home/ipmclab-2/project/Results/Mix_NDPI/100WTC_Result/LP_3200/trial_1"
+wsis = sorted(os.listdir(base_path))
 
-label_dict = {"N": 0, "H": 1, "C": 2}
+for wsi in wsis:
+    if wsi in ["Data", "Loss", "Metric", "Model", "TI"]:
+        continue
+    
+    print(wsi)
+    condition = f"{wsi}_100WTC_LP3200_3_class_trial_1"
 
-for _wsi in wsis:
-    # wsi = _wsi
-    wsi = f"1{_wsi:04d}"
-    save_path = f"{save_dir}/{wsi}"
-    condition = f"{wsi}_10WTC_LP6400_3_class_trial_2" 
-    df = pd.read_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv")
-    labels = df['true_label'].to_list()
-    preds = df['pred_label'].to_list()
-    for label, pred in zip(labels, preds):
-        all_labels.append(label_dict[label])
-        all_preds.append(label_dict[pred])
+    # Load the saved labels/predictions
+    df_results = pd.read_csv(f"{base_path}/Metric/{condition}_labels_predictions.csv")
 
-# 把你的原資料複製一份
-all_labels_fixed = np.array(all_labels).tolist()
-all_preds_fixed = np.array(all_preds).tolist()
+    # Map labels back to indices
+    all_labels = [classes.index(l) for l in df_results["true_label"]]
+    all_preds = []
+    for pred in df_results["pred_label"]:
+        if pd.isna(pred) or pred == "None":
+            all_preds.append(invalid_idx)
+        elif pred in classes:
+            all_preds.append(classes.index(pred))
+        else:
+            # case where pred_label is "2", "3", etc. (ambiguous multi-class)
+            all_preds.append(invalid_idx)
 
-# 人為加上每一個 label 的假樣本（預設 prediction 也設成自己）
-for label in [0, 1, 2]:
-    all_labels_fixed.append(label)
-    all_preds_fixed.append(label)
+    # Compute metrics
+    acc = accuracy_score(all_labels, all_preds)
+    cm = confusion_matrix(all_labels, all_preds, labels=range(len(classes_with_invalid)))
 
-# 計算 confusion matrix
-cm = confusion_matrix(all_labels_fixed, all_preds_fixed, labels=[0, 1, 2])
+    print(cm)
+    print("Accuracy: {:.4f}".format(acc))
 
-# 最後把加的那個 fake 样本在 cm 中扣掉 (每個 fake 樣本只增加 1 到對角線)
-cm = cm - np.eye(3, dtype=int)
+    # Collect per-class stats
+    Test_Acc = {"Condition": [condition], "Accuracy": [acc]}
+    for i, class_name in enumerate(classes):
+        TP = cm[i, i]
+        FN = cm[i, :].sum() - TP
+        FP = cm[:, i].sum() - TP
+        TN = cm.sum() - (TP + FP + FN)
 
-condition = "CC_tani_trial_2"
-# cm = confusion_matrix(all_labels, all_preds, labels=[0, 1, 2])
+        Test_Acc[f"{class_name}_TP"] = [TP]
+        Test_Acc[f"{class_name}_FN"] = [FN]
+        Test_Acc[f"{class_name}_TN"] = [TN]
+        Test_Acc[f"{class_name}_FP"] = [FP]
 
-fig, ax = plt.subplots(figsize=(8, 6))
-cax = ax.matshow(cm, cmap='Blues')
-fig.colorbar(cax)
-
-ax.set_xticks(np.arange(3))
-ax.set_yticks(np.arange(3))
-ax.set_xticklabels(["N", "H", "C"], fontsize=14)
-ax.set_yticklabels(["N", "H", "C"], fontsize=14)
-
-for i in range(cm.shape[0]):
-    for j in range(cm.shape[1]):
-        color = "white" if cm[i, j] > cm.max() / 2 else "black"
-        ax.text(j, i, format(cm[i, j], 'd'), ha="center", va="center", color=color, fontsize=18)
-
-title = f"Confusion Matrix of {condition}"
-plt.title(title, fontsize=20, pad=20)
-ax.set_xlabel('Predicted Label', fontsize=16, labelpad=10)
-ax.set_ylabel('True Label', fontsize=16, labelpad=10)
-
-plt.subplots_adjust(top=0.85)
-plt.savefig(f"{save_dir}/Metric/{condition}_confusion_matrix.png")
+    # Save new test results
+    pd.DataFrame(Test_Acc).to_csv(f"{base_path}/Metric/{condition}_test_result.csv", index=False)
