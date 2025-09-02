@@ -26,7 +26,7 @@ def contours_processing(contours, forImage=False):
             regions.append(contour)
     return regions
 
-def find_contours_of_connected_components(label, sorted_pts, area_thresh):
+def find_contours_of_connected_components(label, sorted_pts, area_thresh, mode):
 
     ### Make HCC or Normal components regions ###
     x_max = np.max(sorted_pts[:, 0])
@@ -43,18 +43,68 @@ def find_contours_of_connected_components(label, sorted_pts, area_thresh):
     for pts in cate_pts:
         x, y = pts[0], pts[1]
         patches_labels[y, x] = 1
-    
-    contours, hierarchy = cv2.findContours((patches_labels > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if mode == external:
+        contours, hierarchy = cv2.findContours((patches_labels > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    elif mode == tree:
+        contours, hierarchy = cv2.findContours((patches_labels > 0).astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # for i, cnt in enumerate(contours):
+    #     next_idx, prev_idx, child_idx, parent_idx = hierarchy[0][i]
+    #     print(f"Contour {i}:")
+    #     print(f"  Next: {next_idx}, Prev: {prev_idx}")
+    #     print(f"  First Child: {child_idx}, Parent: {parent_idx}")
+
+    def get_contour_depth(hierarchy, idx):
+        depth = 0
+        parent = hierarchy[0][idx][3]
+        while parent != -1:
+            depth += 1
+            parent = hierarchy[0][parent][3]
+        return depth
+
+    filtered_idx = []
     filtered_contours = []
     convex_hulls = []
-    for contour in contours:
+    contour_depths = []
+
+    for idx, contour in enumerate(contours):
         area = cv2.contourArea(contour)
         if area > area_thresh:
-            hull = cv2.convexHull(contour)
+            filtered_idx.append(idx)
             filtered_contours.append(contour)
+            depth = get_contour_depth(hierarchy, idx)
+            contour_depths.append(depth)
+
+            hull = cv2.convexHull(contour)
             convex_hulls.append(hull)
+            
+    filtered_hierarchy = []
+    index_map = {orig_idx: new_idx for new_idx, orig_idx in enumerate(filtered_idx)}
+    for idx in filtered_idx:
+        next_idx, prev_idx, child_idx, parent_idx = hierarchy[0][idx]
+        new_next   = index_map.get(next_idx, -1)
+        new_prev   = index_map.get(prev_idx, -1)
+        new_child  = index_map.get(child_idx, -1)
+        new_parent = index_map.get(parent_idx, -1)
+
+        filtered_hierarchy.append([new_next, new_prev, new_child, new_parent])
+
+    parent_to_children = {}
     
-    return filtered_contours, convex_hulls, patches_labels, patches_labels.shape[0], patches_labels.shape[1]
+    for i in range(len(filtered_hierarchy)):
+        parent = filtered_hierarchy[i][3]  # Parent index
+        if parent != -1:
+            if parent not in parent_to_children:
+                parent_to_children[parent] = []
+            parent_to_children[parent].append(i)
+
+    # for i, cnt in enumerate(filtered_contours):
+    #     child_idx, parent_idx = filtered_hierarchy[i]
+    #     print(f"Contour {i}:")
+    #     # print(f"  Next: {next_idx}, Prev: {prev_idx}")
+    #     print(f"  First Child: {child_idx}, Parent: {parent_idx}")
+
+    return filtered_contours, convex_hulls, parent_to_children, contour_depths
 
 def is_point_on_line_segment(start, end, point, tol=1e-9):
     (x1, y1), (x2, y2), (x, y) = start, end, point
@@ -170,7 +220,7 @@ def find_contour_new(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, s
     patches_in_regions = []
 
     ### Get contours ###
-    contours, hulls, _, _, _ = find_contours_of_connected_components(label=cl, sorted_pts=sorted_all_pts, area_thresh=area_thresh)
+    contours, hulls, _ = find_contours_of_connected_components(label=cl, sorted_pts=sorted_all_pts, area_thresh=area_thresh, mode=external)
     regions = contours_processing(contours, forImage=False)
     regions_hulls = contours_processing(hulls, forImage=False)
 
@@ -178,9 +228,9 @@ def find_contour_new(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, s
     for pts in sorted_all_pts:
         ptx, pty, pseudo_label = pts[0], pts[1], pts[2]
         left_up = [int(ptx), int(pty)]
-        # right_up = [int(ptx) + 1, int(pty)]
-        # left_down = [int(ptx), int(pty) + 1]
-        # right_down = [int(ptx) + 1, int(pty) + 1]
+        right_up = [int(ptx) + 1, int(pty)]
+        left_down = [int(ptx), int(pty) + 1]
+        right_down = [int(ptx) + 1, int(pty) + 1]
 
         cl_text = "HCC" if cl == "H" else "Normal"
         formatted_filename = (
@@ -192,7 +242,7 @@ def find_contour_new(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, s
         ### Check pts in every HCC region or not ###
         true_label_index = {'N': 0, 'H': 1, 'C': 2}[cl]
         for idx, region in enumerate(regions):
-            if ((Point_in_Region(left_up, region)==True)):
+            if Point_in_Region(left_up, region):
                 if (formatted_filename in all_patches) and (formatted_filename not in selected_patches['file_name']):
                     selected_patches['file_name'].append(formatted_filename)
                     selected_patches['label'].append(cl)
@@ -223,6 +273,87 @@ def find_contour_new(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, s
                     patches_in_hulls.append(formatted_filename)
 
     return selected_patches, patches_in_regions, tp_in_regions, fp_in_regions
+
+def find_contour_new_tree(wsi, sorted_all_pts, state, cl, area_thresh, all_patches, selected_patches):
+    patches_in_hulls = []
+    tp_in_regions, fp_in_regions = {}, {}
+    patches_in_regions = []
+    in_holes = []
+
+    ### Get contours ###
+    contours, hulls, parent_to_children, contour_depths = find_contours_of_connected_components(label=cl, sorted_pts=sorted_all_pts, area_thresh=area_thresh, mode=tree)
+    regions = contours_processing(contours, forImage=False)
+    regions_hulls = contours_processing(hulls, forImage=False)
+
+    ### Select data in regions ###
+    for pts in sorted_all_pts:
+        ptx, pty, pseudo_label = pts[0], pts[1], pts[2]
+        left_up = [int(ptx), int(pty)]
+        right_up = [int(ptx) + 1, int(pty)]
+        left_down = [int(ptx), int(pty) + 1]
+        right_down = [int(ptx) + 1, int(pty) + 1]
+
+        cl_text = "HCC" if cl == "H" else "Normal"
+        formatted_filename = (
+            f'C{wsi}_{cl_text}-{int(ptx * pts_ratio):05d}-{int(pty * pts_ratio):05d}-{pts_ratio:05d}x{pts_ratio:05d}.tif'
+            if state == "old"
+            else f'{int(ptx * pts_ratio)}_{int(pty * pts_ratio)}.tif'
+        )
+
+        ### Check pts in every HCC region or not ###
+        true_label_index = {'N': 0, 'H': 1, 'C': 2}[cl]
+        for idx, region in enumerate(regions):
+            if contour_depths[idx] % 2 == 0:
+                if  Point_in_Region(left_up, region) and \
+                    Point_in_Region(right_up, region) and \
+                    Point_in_Region(left_down, region) and \
+                    Point_in_Region(right_down, region):
+                    
+                    holes = parent_to_children.get(idx, [])
+
+                    inside_hole = False
+                    for hole in holes:
+                        hole_region = regions[hole]
+                        if (Point_in_Region(left_up, hole_region) and \
+                            Point_in_Region(right_up, hole_region) and \
+                            Point_in_Region(left_down, hole_region) and \
+                            Point_in_Region(right_down, hole_region)):
+                            inside_hole = True
+                            break
+                    
+                    if not inside_hole:
+                        if (formatted_filename in all_patches) and (formatted_filename not in selected_patches['file_name']):
+                            selected_patches['file_name'].append(formatted_filename)
+                            selected_patches['label'].append(cl)
+
+                            tp_or_fp = 'tp' if pseudo_label == true_label_index else 'fp'
+                            # if idx not in patches_in_regions.keys():
+                            #     patches_in_regions[idx] = []
+                            # patches_in_regions[idx].append({'file_name':formatted_filename, 'type':tp_or_fp})
+                            patches_in_regions.append({
+                                'contour_idx': idx,
+                                'file_name': formatted_filename,
+                                'type': tp_or_fp
+                            })
+
+                            if idx not in tp_in_regions.keys():
+                                tp_in_regions[idx] = 0
+                            if idx not in fp_in_regions.keys():
+                                fp_in_regions[idx] = 0
+                            
+                            if tp_or_fp == 'tp':
+                                tp_in_regions[idx] += 1
+                            else:
+                                fp_in_regions[idx] += 1
+                    else:
+                        in_holes.append(formatted_filename)
+        
+        for region_hull in regions_hulls:
+            if ((Point_in_Region(left_up, region_hull)==True)):
+                if formatted_filename not in patches_in_hulls:
+                    patches_in_hulls.append(formatted_filename)
+
+    return selected_patches, patches_in_regions, tp_in_regions, fp_in_regions, in_holes
 
 def zscore_filter(tp_in_cancer_regions, fp_in_cancer_regions, tn_in_norm_regions, fn_in_norm_regions, patches_in_cancer_regions, patches_in_norm_regions, cl):
     pos_num, neg_num = 0,0
