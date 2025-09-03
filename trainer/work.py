@@ -510,7 +510,41 @@ class Worker():
             pd.DataFrame(test_data).to_csv(f"{save_path}/{condition}_test.csv", index=False)
 
         return train_dataset, valid_dataset, test_dataset
-   
+    
+
+    def load_datasets(self, save_path, condition, data_stage, wsi):
+        train_csv = f"{save_path}/{condition}_train.csv"
+        valid_csv = f"{save_path}/{condition}_valid.csv"
+        test_csv  = f"{save_path}/{condition}_test.csv"
+
+        if data_stage == "train":
+            if os.path.exists(train_csv) and os.path.exists(valid_csv):
+                # read from existing files
+                Train = pd.read_csv(train_csv).to_dict(orient="list")
+                Valid = pd.read_csv(valid_csv).to_dict(orient="list")
+
+                train_dataset = self.TrainDataset(
+                    Train, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new"
+                )
+                valid_dataset = self.TrainDataset(
+                    Valid, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new"
+                )
+                return train_dataset, valid_dataset, None
+            else:
+                print(train_csv, valid_csv)
+                raise FileNotFoundError("train/valid CSV not found")
+
+        elif data_stage == "test":
+            if os.path.exists(test_csv):
+                Test = pd.read_csv(test_csv).to_dict(orient="list")
+                test_dataset = self.TestDataset(
+                    Test, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", label_exist=False
+                )
+                return None, None, test_dataset
+            else:
+                print(test_csv)
+                raise FileNotFoundError("test CSV not found")
+
     def build_pl_dataset(self, wsi, gen, save_path, mode, labeled):
         '''
         selected_patches: patches that is in some class of contour, but the label of patch may not the same as the contour label.
@@ -688,8 +722,9 @@ class Worker():
         plt.title("Train vs Valid Loss & Accuracy")
         plt.savefig(f"{save_path}/{condition}_loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
     
-    def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class, min_epoch = 20):
-        n_epochs = 100
+    def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class):
+        n_epochs = self.file_paths['max_epoch']
+        min_epoch = self.file_paths['min_epoch']
         notImprove = 0
         min_loss = 1000.
 
@@ -698,7 +733,7 @@ class Worker():
         valid_loss_list = []
         valid_acc_list = []
 
-        for epoch in range(1, n_epochs):
+        for epoch in range(1, n_epochs+1):
             # ---------- Training ----------
             # Make sure the model is in train mode before training.
             model.train()
@@ -814,7 +849,7 @@ class Worker():
             })
 
             training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
-            # torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
+            torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
 
             if valid_avg_loss < min_loss:
                 # Save model if your model improved
@@ -840,7 +875,13 @@ class Worker():
         elif self.type == "CC":
             _wsi = f"1{wsi:04d}"
 
-        save_path = f"{self.save_path}/{_wsi}/trial_{self.num_trial}"
+        if self.type == "HCC":
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_1"
+        else:
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_1"
+
         condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
         print(f"WSI {_wsi} | {condition}")
 
@@ -850,7 +891,11 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train", wsi = wsi)
+        # train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train", wsi = wsi)
+        
+        data_condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_2_class_trial_1"
+        train_dataset, valid_dataset, _ = self.load_datasets(f"{data_save_path}/Data", data_condition, "train", wsi=wsi)
+
         print(f"training data number: {len(train_dataset)}, validation data number: {len(valid_dataset)}")
 
         train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
@@ -868,11 +913,7 @@ class Worker():
         
         criterion = nn.BCEWithLogitsLoss()
 
-        min_epoch = 20
-        start_time = time.time()
-        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=min_epoch)
-        end_time = time.time()
-        print(f"{min_epoch} epochs time on ssd for 1 WSI, {self.data_num} patches for each class: {end_time-start_time}")
+        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
     def train(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -989,9 +1030,7 @@ class Worker():
             criterion = nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-            min_epoch = 5
-
-            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None, min_epoch=min_epoch)
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
         # Record Information
@@ -1120,46 +1159,48 @@ class Worker():
             self._test(test_dataset, data_info_df, model, save_path, condition)
         
         elif self.test_model == "multi":
-            model_wsis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64, 66, 67, 68, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91]
-            for model_wsi in model_wsis:
-                # Prepare Model
-                if self.state == "old":
-                    _model_wsi = model_wsi
-                    # model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.num_trial}"
-                    if model_wsi in [1, 2, 3, 4, 5]:
-                        model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_2"
-                        modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_2_Model.ckpt"
-                    else:
-                        model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_1"
-                        modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_1_Model.ckpt"
-                elif self.type == "HCC":
-                    _model_wsi = model_wsi + 91
-                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{self.num_trial}"
-                elif self.type == "CC":
-                    _model_wsi = f"1{model_wsi:04d}"
-                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.num_trial}"
+            # model_wsis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64, 66, 67, 68, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91]
+            # for model_wsi in model_wsis:
+            #     # Prepare Model
+            #     if self.state == "old":
+            #         _model_wsi = model_wsi
+            #         # model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.num_trial}"
+            #         if model_wsi in [1, 2, 3, 4, 5]:
+            #             model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_2"
+            #             modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_2_Model.ckpt"
+            #         else:
+            #             model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_1"
+            #             modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_1_Model.ckpt"
+            #     elif self.type == "HCC":
+            #         _model_wsi = model_wsi + 91
+            #         model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{self.num_trial}"
+            #     elif self.type == "CC":
+            #         _model_wsi = f"1{model_wsi:04d}"
+            #         model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.num_trial}"
 
-                # modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}_Model.ckpt"
-                model_path = f"{model_dir}/Model/{modelName}"
-
-                model = self.EfficientNetWithLinear(output_dim = self.class_num)
-                model.load_state_dict(torch.load(model_path, weights_only=True))
-                model.to(device)
-
-                _condition = f'{condition}_on_model_{model_wsi}'
-
-                self._test(test_dataset, data_info_df, model, save_path, _condition)
-
-            # for ep in range(1, 21):
-            #     modelName = f"{condition}_Model_epoch{ep}.ckpt"
-            #     model_path = f"{save_path}/Model/{modelName}"
+            #     # modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}_Model.ckpt"
+            #     model_path = f"{model_dir}/Model/{modelName}"
 
             #     model = self.EfficientNetWithLinear(output_dim = self.class_num)
             #     model.load_state_dict(torch.load(model_path, weights_only=True))
             #     model.to(device)
 
-            #     _condition = f'{condition}_for_epoch_{ep}'
+            #     _condition = f'{condition}_on_model_{model_wsi}'
+
             #     self._test(test_dataset, data_info_df, model, save_path, _condition)
+
+            for ep in range(1, 21):
+                modelName = f"{condition}_Model_epoch{ep}.ckpt"
+                model_path = f"{save_path}/Model/{modelName}"
+                if not os.path.exists(model_path):
+                    continue
+
+                model = self.EfficientNetWithLinear(output_dim = self.class_num)
+                model.load_state_dict(torch.load(model_path, weights_only=True))
+                model.to(device)
+
+                _condition = f'{condition}_for_epoch_{ep}'
+                self._test(test_dataset, data_info_df, model, save_path, _condition)
     
     def test(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
