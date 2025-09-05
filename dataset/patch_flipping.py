@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-def find_small_areas(img_pad):
+def find_areas(img_pad):
 
     img_inv = (img_pad == 0).astype(np.uint8)
 
@@ -10,11 +10,11 @@ def find_small_areas(img_pad):
     return num_labels, labels, stats
 
 def flip_patch(img_pad, num_labels, labels, stats, area_thresh):
-    img_filtered = img_pad.copy()
+    img_pad_filtered = img_pad.copy()
     for comp_id in range(1, num_labels):  # skip background
         area = stats[comp_id, cv2.CC_STAT_AREA]
         if area <= 3:
-            img_filtered[labels == comp_id] = 1
+            img_pad_filtered[labels == comp_id] = 1
     
     return img_pad_filtered
 
@@ -37,9 +37,9 @@ if __name__ == '__main__':
     img_pad = np.zeros((h+2, w+2))
     img_pad[1:1+h, 1:1+w] = img
 
-    num_labels, labels, stats = find_small_areas(img_pad)
+    num_labels, labels, stats = find_areas(img_pad)
 
     img_pad_filtered = flip_patch(img_pad, num_labels, labels, stats, area_thresh=3)
-    img_filtered = img_pad_filtered[1:-2, 1:-2]
+    img_filtered = img_pad_filtered[1:-1, 1:-1]
 
     print("Filtered image:\n", img_filtered)
