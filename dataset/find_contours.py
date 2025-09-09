@@ -44,9 +44,9 @@ def find_contours_of_connected_components(label, sorted_pts, area_thresh, mode):
         x, y = pts[0], pts[1]
         patches_labels[y, x] = 1
 
-    if mode == external:
+    if mode == "external":
         contours, hierarchy = cv2.findContours((patches_labels > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    elif mode == tree:
+    elif mode == "tree":
         contours, hierarchy = cv2.findContours((patches_labels > 0).astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     # for i, cnt in enumerate(contours):
     #     next_idx, prev_idx, child_idx, parent_idx = hierarchy[0][i]
@@ -281,7 +281,7 @@ def find_contour_new_tree(wsi, sorted_all_pts, state, cl, area_thresh, all_patch
     in_holes = []
 
     ### Get contours ###
-    contours, hulls, parent_to_children, contour_depths = find_contours_of_connected_components(label=cl, sorted_pts=sorted_all_pts, area_thresh=area_thresh, mode=tree)
+    contours, hulls, parent_to_children, contour_depths = find_contours_of_connected_components(label=cl, sorted_pts=sorted_all_pts, area_thresh=area_thresh, mode="tree")
     regions = contours_processing(contours, forImage=False)
     regions_hulls = contours_processing(hulls, forImage=False)
 

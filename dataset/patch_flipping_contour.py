@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import matplotlib.path as mpath
 from sklearn.preprocessing import StandardScaler
+import pandas as pd
 
 def is_point_on_line_segment(start, end, point, tol=1e-9):
     (x1, y1), (x2, y2), (x, y) = start, end, point
@@ -36,7 +37,7 @@ def Point_in_Region(point, polygon):
     return False
 
 def find_areas(binary_img):
-    return cv2.findContours((binary_img > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return cv2.findContours((binary_img > 0).astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     
 def flip_patch(binary_img, contours, hierarchy, area_thresh):
@@ -52,6 +53,7 @@ def flip_patch(binary_img, contours, hierarchy, area_thresh):
     filtered_idx = []
     filtered_contours = []
     contour_depths = []
+    areas = []
 
     for idx, contour in enumerate(contours):
         area = cv2.contourArea(contour)
@@ -60,6 +62,7 @@ def flip_patch(binary_img, contours, hierarchy, area_thresh):
             filtered_contours.append(contour)
             depth = get_contour_depth(hierarchy, idx)
             contour_depths.append(depth)
+            areas.append(area)
             
     filtered_hierarchy = []
     index_map = {orig_idx: new_idx for new_idx, orig_idx in enumerate(filtered_idx)}
@@ -87,7 +90,8 @@ def flip_patch(binary_img, contours, hierarchy, area_thresh):
         regions.append(contour)
 
     h, w = binary_img.shape
-    output_img = np.zeros((h, w))
+    # output_img = np.zeros((h, w))
+    output_img = np.copy(binary_img)
 
     for pty in range(h):
         for ptx in range(w):
@@ -97,7 +101,8 @@ def flip_patch(binary_img, contours, hierarchy, area_thresh):
             # right_down = [int(ptx) + 1, int(pty) + 1]
 
             for idx, region in enumerate(regions):
-                if contour_depths[idx] % 2 == 0:
+                # print(areas[idx], contour_depths[idx])
+                if contour_depths[idx] == 0:
                     if  Point_in_Region(left_up, region):
                         holes = parent_to_children.get(idx, [])
 
@@ -114,21 +119,62 @@ def flip_patch(binary_img, contours, hierarchy, area_thresh):
 
 
 if __name__ == '__main__':
-    img = np.array(
-        [[0, 0, 0, 0, 0, 0, 0, 0],
-         [0, 1, 1, 0, 0, 0, 1, 0],
-         [0, 1, 0, 1, 0, 0, 1, 0],
-         [0, 1, 1, 1, 0, 1, 1, 1],
-         [1, 1, 1, 0, 0, 1, 0, 1],
-         [1, 0, 1, 0, 0, 1, 0, 1],
-         [0, 1, 0, 1, 0, 1, 0, 1],
-         [0, 0, 1, 1, 0, 1, 1, 1]
-        ], dtype=np.uint8
-    )
+    # img = np.array(
+    #     [[0, 0, 0, 0, 0, 0, 0, 0],
+    #      [0, 1, 1, 0, 0, 0, 1, 0],
+    #      [0, 1, 0, 1, 0, 0, 1, 0],
+    #      [0, 1, 1, 1, 0, 1, 1, 1],
+    #      [1, 1, 1, 0, 0, 1, 0, 1],
+    #      [1, 0, 1, 0, 0, 1, 0, 1],
+    #      [0, 1, 0, 1, 0, 1, 0, 1],
+    #      [0, 0, 1, 1, 0, 1, 1, 1]
+    #     ], dtype=np.uint8
+    # )
+    pts_ratio = 448
 
-    h, w = img.shape
+    df = pd.read_csv(f"/workspace/Data/Results/Mix_NDPI/Generation_Training/100WTC_LP_3200/10138/trial_5/TI/10138_3_class_all_patches_filter_v2_TI.csv")
+    all_patches = df['file_name'].to_list()
+    selected_columns = []
+    for cl in ["N", "H", "C"]:
+        selected_columns.append(f"{cl}_pred")
+    selected_data = df[selected_columns].to_numpy()
 
-    contours, hierarchy = find_areas(img)
-    img_filtered = flip_patch(img, contours, hierarchy, area_thresh=3)
+    ### Get (x, y, pseudo-label) of every patch ###
+    all_pts = []
+    for idx, img_name in enumerate(all_patches):
+        x, y = img_name[:-4].split('_')
+        row = selected_data[idx, :]
+        max_col = np.argmax(row)
+        all_pts.append([(int(x)) // pts_ratio, (int(y)) // pts_ratio, max_col])
+    all_pts = np.array(all_pts)
 
-    print("Filtered image:\n", img_filtered)
+    ### First sorted pts on x, then on y ###
+    sorted_index = np.lexsort((all_pts[:, 1], all_pts[:, 0]))
+    sorted_all_pts = all_pts[sorted_index] # x, y, label
+
+    selected_patches = {'file_name': [], 'label': []}
+
+    for idx, cl in enumerate(["N"]):
+        print(f"running for {cl} ...")
+
+        ### Make HCC or Normal components regions ###
+        x_max = np.max(sorted_all_pts[:, 0])
+        y_max = np.max(sorted_all_pts[:, 1])
+        binary_img = np.zeros((y_max+1, x_max+1), np.uint8)  # for connected-components of HCC/Normal patches
+        h, w = binary_img.shape
+
+        cate_pts = sorted_all_pts[sorted_all_pts[:, 2] == idx]
+
+        for pts in cate_pts:
+            x, y = pts[0], pts[1]
+            binary_img[y, x] = 1
+
+        img = binary_img
+        h, w = img.shape
+
+        contours, hierarchy = find_areas(img)
+        img_filtered = flip_patch(img, contours, hierarchy, area_thresh=3)
+
+        # print("Filtered image:\n", img_filtered)
+        save_img = (img_filtered * 255).astype(np.uint8)
+        cv2.imwrite("contour_filtered_result.png", save_img)
