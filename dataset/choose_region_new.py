@@ -60,7 +60,7 @@ def check_patch_condition(image_path):
 
     start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    if np.mean(gray_image) >= 250:  #white
+    if np.mean(gray_image) >= 230:  #white
         return 1
     end_mean_pixel = time.time()
     # print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")

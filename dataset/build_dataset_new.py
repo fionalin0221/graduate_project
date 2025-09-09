@@ -27,7 +27,7 @@ def check_patch_condition(image_path):
 
     start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    if np.mean(gray_image) >= 250:  #white
+    if np.mean(gray_image) >= 230:  #white
         return 1
     end_mean_pixel = time.time()
     # print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")
@@ -118,7 +118,7 @@ for wsi in wsis:
 
         save_file_name = (
             f"{wsi+91}/{wsi+91}_all_patches_filter_v2.csv" if (type == "HCC")
-            else f"{wsi}/1{wsi:04d}_all_patches_filter_v2.csv"
+            else f"{wsi}/1{wsi:04d}_all_patches_filter_v2_230.csv"
         )
 
         pd.DataFrame(Filter_Region).to_csv(f"{csv_dir}/{save_file_name}", index=False)
