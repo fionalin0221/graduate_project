@@ -90,11 +90,12 @@ def process_image(f, patches_path, all_region, classes):
     left_down = [int(fx), int(fy) + 448]
     right_down = [int(fx) + 448, int(fy) + 448]
 
-    for label_name, region in all_region.items():
+    for label_name, regions in all_region.items():
         if label_name in classes:
-            region = np.array(region)
-            if all(Point_in_Region(pt, region) for pt in [left_up, right_up, left_down, right_down]):
-                return f, label_name
+            for region in regions:
+                region = np.array(region)
+                if all(Point_in_Region(pt, region) for pt in [left_up, right_up, left_down, right_down]):
+                    return f, label_name
 
     return None
 
@@ -133,11 +134,13 @@ for wsi in wsis:
         # print(child.tag, child.attrib)
         if child.tag == 'Region':
             current_label = child.attrib['Text']
-            all_region[current_label] = []
+            if current_label not in all_region:
+                all_region[current_label] = []
+            all_region[current_label].append([])  # start a new polygon list
         if child.tag == 'Vertex':
             x = int(float(child.attrib['X']))
             y = int(float(child.attrib['Y']))
-            all_region[current_label].append((x, y))
+            all_region[current_label][-1].append((x, y))
     
     if cancer_type == "HCC":
         csv_dir = os.path.join(file_paths['HCC_csv_dir'],f"{wsi+91}")
