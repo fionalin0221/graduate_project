@@ -742,7 +742,7 @@ class Worker():
 
     class EfficientNetWithLinear(nn.Module):
         def __init__(self, output_dim, pretrain='efficientnet-b0'):
-            nn.Module.__init__(self)
+            super().__init__()
             # Load pre-trained EfficientNet model
             self.backbone = EfficientNet.from_name(pretrain)
             
@@ -813,29 +813,27 @@ class Worker():
             train_acc = []
             train_bar = tqdm(train_loader)
 
-            start_time = time.time()
             for idx, batch in enumerate(train_bar):
                 # A batch consists of image data and corresponding labels.
-                end_time = time.time()
-                # print(f"read data time: {end_time-start_time}")
                 imgs, labels, _ = batch
 
                 # Forward the data. (Make sure data and model are on the same device.)
                 if target_class == None:
                     labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
                     logits = model(imgs.to(device))
-                    # preds = Sigmoid(logits)
                     loss = criterion(logits, labels)
-                    # acc = (logits.argmax(dim=-1) == labels.argmax(dim=-1)).float().mean()
-                    preds = (logits >= 0.5).int()
-                    acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                    preds = (torch.sigmoid(logits) >= 0.5).int()
+                    # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                    correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                    acc = correct_per_sample.float().mean()
                 else:            
                     labels = (labels == target_class).to(device).unsqueeze(1).float()
                     logits = model(imgs.to(device))
-                    # preds = Sigmoid(logits)
                     loss = criterion(logits, labels)
-                    preds = (logits > 0.5).float()
-                    acc = (preds == labels).float().mean()
+                    preds = (torch.sigmoid(logits) > 0.5).float()
+                    # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                    correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                    acc = correct_per_sample.float().mean()
 
                 # Gradients stored in the parameters in the previous step should be cleared out first.
                 optimizer.zero_grad()
@@ -851,13 +849,6 @@ class Worker():
                     
                 train_avg_loss = sum(train_loss) / len(train_loss)
                 train_avg_acc = sum(train_acc) / len(train_acc)
-
-                # if idx % 100 == 0:
-                #     msg = f"[ Train | Epoch{epoch} Batch{idx} ] loss = {train_avg_loss:.5f}, acc = {train_avg_acc:.5f}"
-                #     tqdm.write(msg)
-
-                start_time = time.time()
-                # print(f"computation time: {start_time-end_time}")
                 
             train_loss_list.append(train_avg_loss)
             train_acc_list.append(train_avg_acc)
@@ -886,14 +877,18 @@ class Worker():
                         loss = criterion(logits, labels)
                         # val_acc = (logits.argmax(dim=-1) == labels.argmax(dim=-1)).float().mean()
                         preds = (logits >= 0.5).int()
-                        val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                        # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                        correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                        val_acc = correct_per_sample.float().mean()
                     else:            
                         labels = (labels == target_class).to(device).unsqueeze(1).float()
                         logits = model(imgs.to(device))
                         # preds = Sigmoid(logits)
                         loss = criterion(logits, labels)
                         preds = (logits > 0.5).float()
-                        val_acc = (preds == labels).float().mean()
+                        # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                        correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                        val_acc = correct_per_sample.float().mean()
                     
                     # Record the loss and accuracy.
                     valid_loss.append(loss.cpu().item())
@@ -904,10 +899,6 @@ class Worker():
                     # The average loss and accuracy for entire validation set is the average of the recorded values.
                     valid_avg_loss = sum(valid_loss) / len(valid_loss)
                     valid_avg_acc = sum(valid_acc) / len(valid_acc)
-
-                    # if idx % 100 == 0:
-                    #     msg = f"[ Valid | Epoch{epoch} Batch{idx} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}"
-                    #     tqdm.write(msg)
 
             valid_loss_list.append(valid_avg_loss)
             valid_acc_list.append(valid_avg_acc)
@@ -1121,31 +1112,22 @@ class Worker():
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
-        # Record Information
-        # Predictions = {"file_name": []}
-        # for class_name in self.classes:
-        #     Predictions[f"{class_name}_pred"] = []
-
         test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
         model.eval()
-        # Sigmoid = nn.Sigmoid()
 
+        # Record Information
         all_fnames = []
         all_preds = []
 
         with torch.no_grad():
             for imgs, fname in tqdm(test_loader):
+                # Inference
                 logits = model(imgs.to(device, non_blocking=True))
                 preds = torch.sigmoid(logits)
 
                 all_preds.append(preds.cpu())
                 all_fnames.extend(fname)
-                
-                # Inference
-                # Predictions["file_name"].extend(fname)
-                # for idx, class_name in enumerate(self.classes):
-                #     Predictions[f"{class_name}_pred"].extend(preds.cpu().numpy()[:, idx])
 
         # Concatenate once outside the loop
         all_preds = torch.cat(all_preds).numpy()
@@ -1331,7 +1313,6 @@ class Worker():
 
     def test_TATI(self, wsi, gen, save_path = None, mode = 'ideal'):
         ### Multi-WTC Evaluation ###
-        # if save_path == None:
         if self.test_state == "old":
             _wsi = wsi
         elif self.test_type == "HCC":
@@ -1398,7 +1379,6 @@ class Worker():
 
     def test_all(self, wsi, gen, save_path = None, mode = 'selected'):
         ### Multi-WTC Evaluation ###
-        # if save_path == None:
         if self.test_state == "old":
             _wsi = wsi
         elif self.test_type == "HCC":
