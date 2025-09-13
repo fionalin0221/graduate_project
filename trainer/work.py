@@ -27,7 +27,7 @@ from efficientnet_pytorch import EfficientNet
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
-# torch.manual_seed(0)
+torch.manual_seed(0)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -47,9 +47,12 @@ class Worker():
         class_list = config["class_list"]
         self.classes = [class_list[i] for i in self.file_paths['classes']]
         self.class_num = len(self.classes)
+        self.batch_size = self.file_paths['batch_size']
+        self.base_lr = float(self.file_paths['base_lr'])
 
         self.data_num = self.file_paths['data_num']
-        self.num_trial = self.file_paths['num_trial']   
+        self.num_trial = self.file_paths['num_trial']  
+        self.data_trial = self.file_paths['data_trial'] 
         self.num_wsi = self.file_paths['num_wsi']
         self.test_model = self.file_paths['test_model']
 
@@ -333,16 +336,16 @@ class Worker():
         train, val, test = [], [], []
         for num in range(len(self.classes)):
             if len(datas[num]) > 0:
-                train_, temp = train_test_split(datas[num], test_size=0.2, random_state=0)  # 80:20 split
-                val_, test_ = train_test_split(temp, test_size=0.5, random_state=0)  # 50:50 split on 20% = 10% each
+                train_, val_ = train_test_split(datas[num], test_size=0.2, random_state=0)  # 80:20 split
+                # val_, test_ = train_test_split(temp, test_size=0.5, random_state=0)  # 50:50 split on 20% = 10% each
                 
                 train.append(train_)
                 val.append(val_)
-                test.append(test_)
+                # test.append(test_)
             else:
                 train.append([])
                 val.append([])
-                test.append([])
+                # test.append([])
 
         # Flatten and extract file_name, label, and augment flag
         def extract_info(split_list, class_index):
@@ -366,22 +369,20 @@ class Worker():
             val_labels += lb
             val_augments += aug
 
-            fn, lb, aug = extract_info(test[i], i)
-            test_file_names += fn
-            test_labels += lb
-            test_augments += aug
+            # fn, lb, aug = extract_info(test[i], i)
+            # test_file_names += fn
+            # test_labels += lb
+            # test_augments += aug
 
-        error_rate = self.file_paths['error_rate']  # 例如 10% 的訓練資料錯誤
+        error_rate = self.file_paths['error_rate']  # Let 10% of data be wrong
 
         if error_rate > 0:
-            # 在 build Train dict 之前，隨機挑一些 index 讓 label 錯掉
             n_samples = len(train_labels)
             n_errors = int(n_samples * error_rate)
             error_indices = random.sample(range(n_samples), n_errors)
 
             for i in error_indices:
                 correct_label = train_labels[i]
-                # 隨機挑一個錯的標籤（不能跟正確的一樣）
                 wrong_choices = [cl for cl in self.classes if cl != correct_label]
                 train_labels[i] = random.choice(wrong_choices)
 
@@ -395,11 +396,12 @@ class Worker():
             "label": val_labels,
             "augment": val_augments,
         }
-        Test = {
-            "file_name": test_file_names,
-            "label": test_labels,
-            "augment": test_augments,
-        }
+        # Test = {
+        #     "file_name": test_file_names,
+        #     "label": test_labels,
+        #     "augment": test_augments,
+        # }
+        Test = {}
         return Train, Val, Test
 
     def prepare_dataset(self, save_path, condition, gen, data_stage, wsi=None, mode=None):
@@ -798,6 +800,8 @@ class Worker():
         train_acc_list = []
         valid_loss_list = []
         valid_acc_list = []
+        iter_train_loss_list = []
+        iter_valid_loss_list = []
 
         for epoch in range(1, n_epochs+1):
             # ---------- Training ----------
@@ -841,15 +845,16 @@ class Worker():
                 optimizer.step()
                 # Record the loss and accuracy.
                 train_loss.append(loss.cpu().item())
+                iter_train_loss_list.append(loss.cpu().item())
                 train_acc.append(acc.cpu().item())
                 torch.cuda.empty_cache()
                     
                 train_avg_loss = sum(train_loss) / len(train_loss)
                 train_avg_acc = sum(train_acc) / len(train_acc)
 
-                if idx % 100 == 0:
-                    msg = f"[ Train | Epoch{epoch} Batch{idx} ] loss = {train_avg_loss:.5f}, acc = {train_avg_acc:.5f}"
-                    tqdm.write(msg)
+                # if idx % 100 == 0:
+                #     msg = f"[ Train | Epoch{epoch} Batch{idx} ] loss = {train_avg_loss:.5f}, acc = {train_avg_acc:.5f}"
+                #     tqdm.write(msg)
 
                 start_time = time.time()
                 # print(f"computation time: {start_time-end_time}")
@@ -892,6 +897,7 @@ class Worker():
                     
                     # Record the loss and accuracy.
                     valid_loss.append(loss.cpu().item())
+                    iter_valid_loss_list.append(loss.cpu().item())
                     valid_acc.append(val_acc.cpu().item())
                     torch.cuda.empty_cache()
 
@@ -899,9 +905,9 @@ class Worker():
                     valid_avg_loss = sum(valid_loss) / len(valid_loss)
                     valid_avg_acc = sum(valid_acc) / len(valid_acc)
 
-                    if idx % 100 == 0:
-                        msg = f"[ Valid | Epoch{epoch} Batch{idx} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}"
-                        tqdm.write(msg)
+                    # if idx % 100 == 0:
+                    #     msg = f"[ Valid | Epoch{epoch} Batch{idx} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}"
+                    #     tqdm.write(msg)
 
             valid_loss_list.append(valid_avg_loss)
             valid_acc_list.append(valid_avg_acc)
@@ -918,7 +924,16 @@ class Worker():
                 "valid_acc": valid_acc_list
             })
 
+            training_iteration_log = pd.DataFrame({
+                "train_loss": iter_train_loss_list
+            })
+            validation_iteration_log = pd.DataFrame({
+                "valid_loss": iter_valid_loss_list
+            })
+
             training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
+            training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
+            validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_valid_iteration_log.csv", index=False)
             torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
 
             if valid_avg_loss < min_loss:
@@ -947,10 +962,10 @@ class Worker():
 
         if self.type == "HCC":
             save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
-            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_1"
+            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.data_trial}"
         else:
             save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
-            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_1"
+            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.data_trial}"
 
         condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
         print(f"WSI {_wsi} | {condition}")
@@ -961,23 +976,23 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        # train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train", wsi = wsi)
-        
-        data_condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_2_class_trial_1"
-        train_dataset, valid_dataset, _ = self.load_datasets(f"{data_save_path}/Data", data_condition, "train", wsi=wsi)
+        if self.file_paths['load_dataset']:
+            data_condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_2_class_trial_{self.data_trial}"
+            train_dataset, valid_dataset, _ = self.load_datasets(f"{data_save_path}/Data", data_condition, "train", wsi=wsi)
+        else:
+            train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train", wsi = wsi)
 
         print(f"training data number: {len(train_dataset)}, validation data number: {len(valid_dataset)}")
 
-        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-        val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=True)
 
         model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.file_paths['pretrain']:
             pretrain_model_path = self.file_paths['40WTC_model_path']
             model.load_state_dict(torch.load(pretrain_model_path, weights_only=True))
-            optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-        else:
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
         model.to(device)
         modelName = f"{condition}_Model.ckpt"
         
@@ -1000,8 +1015,8 @@ class Worker():
         train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
         print(f"training data number: {len(train_dataset)}, validation data number: {len(valid_dataset)}")
         
-        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-        val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
 
         # data_iter = iter(train_loader)
         # images, labels , file_names= next(data_iter)
@@ -1020,7 +1035,7 @@ class Worker():
         
         
         criterion = nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
         self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
@@ -1041,8 +1056,8 @@ class Worker():
 
         train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", 0)
         
-        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-        val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
 
         criterion = nn.BCEWithLogitsLoss()
         
@@ -1050,7 +1065,7 @@ class Worker():
             model = self.EfficientNetWithLinear(output_dim=1)
             model.to(device)
             modelName = f"{condition}_{c}_Model.ckpt"
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+            optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
 
@@ -1084,8 +1099,8 @@ class Worker():
             # Read TI.csv, prepare Dataframe
             train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
 
-            train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-            val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
+            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+            val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
         
             # Model setting and transfer learning or not
             model = self.EfficientNetWithLinear(output_dim = self.class_num)
@@ -1101,7 +1116,7 @@ class Worker():
             modelName = f"{condition}_1WTC.ckpt"
 
             criterion = nn.BCEWithLogitsLoss()
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+            optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
@@ -1111,7 +1126,7 @@ class Worker():
         # for class_name in self.classes:
         #     Predictions[f"{class_name}_pred"] = []
 
-        test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
         model.eval()
         # Sigmoid = nn.Sigmoid()
@@ -1480,14 +1495,17 @@ class Worker():
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            if self.test_model == "self":
+            if self.test_model == "self" or self.test_model == "multi":
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
                 save_path = save_dir
             else:
                 save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
                 save_path = f"{save_dir}/{__wsi}" 
         
-        _condition = f'{__wsi}_{condition}'
+        if self.test_model == "multi":
+            _condition = f'{__wsi}_{condition}_for_epoch_20'
+        else:
+            _condition = f'{__wsi}_{condition}'
         df = pd.read_csv(f"{save_path}/Metric/{_condition}_labels_predictions.csv")
 
         shift_map = self.file_paths["old_HCC_shift_map"]
@@ -1519,9 +1537,9 @@ class Worker():
                 y += dy
 
             if pred_label == gt_label:
-                label = pred_label + 1  # 正確預測：標上 1,2,3
+                label = pred_label + 1  # correct predict: encode as 1,2,3
             else:
-                label = 10 * (gt_label + 1) + (pred_label + 1)  # 錯誤預測：編碼成 11,12,13, 21,22,23, 31,32,33 之類
+                label = 10 * (gt_label + 1) + (pred_label + 1)  # wrong predict：encode asss 11,12,13, 21,22,23, 31,32,33
 
             all_pts.append([x, y, label])
 
@@ -1535,9 +1553,9 @@ class Worker():
 
         if self.class_num == 3:
             color_map = {
-                1: 'green',     # 正確 Normal
-                2: 'red',       # 正確 HCC
-                3: 'blue',      # 正確 CC
+                1: 'green',     # True Normal
+                2: 'red',       # True HCC
+                3: 'blue',      # True CC
                 12: 'orange',   # Normal -> HCC
                 13: 'yellow',   # Normal -> CC
                 21: 'cyan',     # HCC -> Normal
@@ -1658,9 +1676,9 @@ class Worker():
 
         if self.class_num == 3:
             color_map = {
-                1: 'green',     # 正確 Normal
-                2: 'red',       # 正確 HCC
-                3: 'blue',      # 正確 CC
+                1: 'green',     # True Normal
+                2: 'red',       # True HCC
+                3: 'blue',      # True CC
             }
             legend_elements = [
                 plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
