@@ -1159,10 +1159,14 @@ class Worker():
             label = self.classes.index(label_inRegion[idx])
             results_df["file_name"].append(filename)
             row = pred_df[pred_df['file_name'] == filename]
-            preds = []
-            for cl in self.classes:
-                preds.append(row[f'{cl}_pred'].values[0])
-            pred = np.argmax(preds)
+            preds = [row[f'{cl}_pred'].values[0] for cl in self.classes]
+
+            over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
+
+            if len(over_threshold) == 1:
+                pred = over_threshold[0]
+            else:
+                pred = -1
 
             all_labels.append(label)
             all_preds.append(pred)
@@ -1376,6 +1380,82 @@ class Worker():
         print(self.classes)
 
         self._test(test_dataset, data_info_df, model, save_path, _condition)
+    
+    def test_flip(self, wsi, gen, save_path = None, mode = 'selected'):
+        ### Multi-WTC Evaluation ###
+        if self.test_state == "old":
+            _wsi = wsi
+        elif self.test_type == "HCC":
+            _wsi = wsi + 91
+        elif self.test_type == "CC":
+            _wsi = f"1{wsi:04d}"
+
+        if save_path == None:
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+
+        condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
+        
+        os.makedirs(f"{save_path}/Model", exist_ok=True)
+        os.makedirs(f"{save_path}/Metric", exist_ok=True)
+        os.makedirs(f"{save_path}/Loss", exist_ok=True)
+        os.makedirs(f"{save_path}/TI", exist_ok=True)
+        os.makedirs(f"{save_path}/Data", exist_ok=True)
+
+        if self.test_type == "HCC":
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+        elif self.test_type == "CC":
+            data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+        
+        _condition = f'{_wsi}_{condition}'
+        pred_df = pd.read_csv(f'{save_path}/Data/{_condition}.csv')
+        
+        results_df = {"file_name":[]}
+        all_labels, all_preds = [], []
+        match_df  = data_info_df[data_info_df['file_name'].isin(pred_df['file_name'])]
+
+        filename_inRegion = match_df['file_name'].to_list()
+        label_inRegion = match_df['label'].to_list()
+
+        for idx, filename in enumerate(tqdm(filename_inRegion)):
+            label = self.classes.index(label_inRegion[idx])
+            results_df["file_name"].append(filename)
+            row = pred_df[pred_df['file_name'] == filename]
+            pred_label = row['label'].values[0]
+            pred = self.classes.index(pred_label)
+
+            all_labels.append(label)
+            all_preds.append(pred)
+
+        text_labels = [self.classes[label] for label in all_labels]
+        text_preds = [self.classes[pred] for pred in all_preds]
+
+        results_df["true_label"] = text_labels
+        results_df["pred_label"] = text_preds
+
+        # Save to CSV
+        pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{_condition}_flip_labels_predictions.csv", index=False)
+
+        acc = accuracy_score(all_labels, all_preds)
+        print("Accuracy: {:.4f}".format(acc))
+
+        cm = confusion_matrix(all_labels, all_preds, labels=range(len(self.classes)))
+        title = f"Confusion Matrix of {_condition}_flip"
+        self.plot_confusion_matrix(cm, save_path, f"{_condition}_flip", title)
+
+        Test_Acc = {"Condition": [_condition], "Accuracy": [acc]}
+        for i, class_name in enumerate(self.classes):
+            TP = cm[i, i]  # True Positives
+            FN = cm[i, :].sum() - TP  # False Negatives
+            FP = cm[:, i].sum() - TP  # False Positives
+            TN = cm.sum() - (TP + FP + FN)  # True Negatives
+            
+            Test_Acc[f"{class_name}_TP"] = [TP]
+            Test_Acc[f"{class_name}_FN"] = [FN]
+            Test_Acc[f"{class_name}_TN"] = [TN]
+            Test_Acc[f"{class_name}_FP"] = [FP]
+
+        # Save to CSV
+        pd.DataFrame(Test_Acc).to_csv(f"{save_path}/Metric/{_condition}_flip_test_result.csv", index=False)
 
     def test_all(self, wsi, gen, save_path = None, mode = 'selected'):
         ### Multi-WTC Evaluation ###
@@ -1505,9 +1585,6 @@ class Worker():
             # else:
             x, y = img_name[:-4].split('_')
 
-            pred_label  = self.classes.index(df['pred_label'][idx])  # N=0, H=1
-            gt_label = self.classes.index(df['true_label'][idx])
-
             x = (int(x)) // pts_ratio
             y = (int(y)) // pts_ratio
             
@@ -1515,13 +1592,17 @@ class Worker():
                 dx, dy = shift_map[gt_label]
                 x += dx
                 y += dy
+            
+            gt_label = self.classes.index(df['true_label'][idx])
+            if df['pred_label'][idx] != -1:
+                pred_label  = self.classes.index(df['pred_label'][idx])
+                
+                if pred_label == gt_label:
+                    label = pred_label + 1  # correct predict: encode as 1,2,3
+                else:
+                    label = 10 * (gt_label + 1) + (pred_label + 1)  # wrong predict：encode asss 11,12,13, 21,22,23, 31,32,33
 
-            if pred_label == gt_label:
-                label = pred_label + 1  # correct predict: encode as 1,2,3
-            else:
-                label = 10 * (gt_label + 1) + (pred_label + 1)  # wrong predict：encode asss 11,12,13, 21,22,23, 31,32,33
-
-            all_pts.append([x, y, label])
+                all_pts.append([x, y, label])
 
         all_pts = np.array(all_pts)
 
@@ -1627,12 +1708,13 @@ class Worker():
             for idx, img_name in enumerate(all_patches):
                 x, y = img_name[:-4].split('_')
 
-                pred_label  = self.classes.index(df['label'][idx])  # N=0, H=1
+                if df['label'][idx] != -1:
+                    pred_label  = self.classes.index(df['label'][idx])  # N=0, H=1
 
-                x = (int(x)) // pts_ratio
-                y = (int(y)) // pts_ratio
+                    x = (int(x)) // pts_ratio
+                    y = (int(y)) // pts_ratio
 
-                all_pts.append([x, y, pred_label+1])
+                    all_pts.append([x, y, pred_label+1])
 
         else:
             pred_cols = [f"{cl}_pred" for cl in self.classes]
@@ -1640,7 +1722,13 @@ class Worker():
             for idx, img_name in enumerate(all_patches):
                 x, y = img_name[:-4].split('_')
                 row = df.iloc[idx][pred_cols].values
-                pred_label = int(np.argmax(row))   # 0=N, 1=H, 2=C
+                # pred_label = int(np.argmax(row))   # 0=N, 1=H, 2=C
+                over_threshold = [i for i, p in enumerate(row) if p > 0.5]
+
+                if len(over_threshold) == 1:
+                    pred_label = over_threshold[0]
+                else:
+                    pred_label = -1
 
                 x = (int(x)) // pts_ratio
                 y = (int(y)) // pts_ratio
