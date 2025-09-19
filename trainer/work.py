@@ -24,6 +24,8 @@ from dataset import find_contours
 import torch
 import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
+from torchvision.models import vit_b_16, ViT_B_16_Weights
+
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
@@ -47,6 +49,7 @@ class Worker():
         class_list = config["class_list"]
         self.classes = [class_list[i] for i in self.file_paths['classes']]
         self.class_num = len(self.classes)
+        self.backbone = self.file_paths['backbone']
         self.batch_size = self.file_paths['batch_size']
         self.base_lr = float(self.file_paths['base_lr'])
 
@@ -558,8 +561,7 @@ class Worker():
         elif data_stage == "test":
             pd.DataFrame(test_data).to_csv(f"{save_path}/{condition}_test.csv", index=False)
 
-        return train_dataset, valid_dataset, test_dataset
-    
+        return train_dataset, valid_dataset, test_dataset  
 
     def load_datasets(self, save_path, condition, data_stage, wsi):
         train_csv = f"{save_path}/{condition}_train.csv"
@@ -764,6 +766,30 @@ class Worker():
             # Classifier output
             output = self.fc(features)
             
+            return output
+
+    class ViTWithLinear(nn.Module):
+        def __init__(self, output_dim, pretrain=True):
+            super().__init__()
+            # Load pre-trained ViT
+            weights = ViT_B_16_Weights.DEFAULT if pretrain else None
+            self.backbone = vit_b_16(weights=weights)
+            
+            # Remove the default classifier
+            self.backbone.heads = nn.Identity()  # Feature extractor
+            
+            # New classification head
+            self.fc = nn.Sequential(
+                nn.Linear(768, 2560),  # 768 is ViT-B/16 feature dim
+                nn.ReLU(),
+                nn.Linear(2560, 512),
+                nn.ReLU(),
+                nn.Linear(512, output_dim)
+            )
+
+        def forward(self, x):
+            features = self.backbone(x)
+            output = self.fc(features)
             return output
 
     def plot_loss_acc(self, train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, save_path, condition):
@@ -978,7 +1004,10 @@ class Worker():
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
         val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=True)
 
-        model = self.EfficientNetWithLinear(output_dim=self.class_num)
+        if self.backbone == "ViT":
+            model = self.ViTWithLinear(output_dim=self.class_num)
+        else:
+            model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.file_paths['pretrain']:
             pretrain_model_path = self.file_paths['40WTC_model_path']
             model.load_state_dict(torch.load(pretrain_model_path, weights_only=True))
@@ -1240,7 +1269,10 @@ class Worker():
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_path}/Model/{modelName}"
 
-            model = self.EfficientNetWithLinear(output_dim = self.class_num)
+            if self.backbone == "ViT":
+                model = self.ViTWithLinear(output_dim=self.class_num)
+            else:
+                model = self.EfficientNetWithLinear(output_dim=self.class_num)
             model.load_state_dict(torch.load(model_path, weights_only=True))
             model.to(device)
 
@@ -1476,6 +1508,7 @@ class Worker():
                     model = self.EfficientNetWithLinear(output_dim = len(self.classes))
                 elif self.test_model == "3_class_40WTC":
                     model_path = self.file_paths['40WTC_model_path']
+                    model = self.EfficientNetWithLinear(output_dim = len(self.classes))
                 # else:
                 #     model_path = self.file_paths['HCC_100WTC_model_path']
                 #     model = EfficientNet.from_name('efficientnet-b0')
