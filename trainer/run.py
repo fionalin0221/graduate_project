@@ -19,16 +19,22 @@ def main():
     # worker.train()
     # worker.train_multi_model()
     # worker.test()
-    # worker.contour_analysis_multi(0, )
+    # worker.contour_analysis_multi()
     for wsi in wsis:
         worker.train_one_WSI(wsi)
         worker.test_one_WSI(wsi)
-        # worker.test_TATI(wsi, 0, save_path = None)
-        # worker.plot_TI_Result(wsi, 0, save_path = None)
-        # worker.train_generation(wsi)
-        # worker.test_TATI(wsi, config['generation']-1, save_path = None)
-        # worker.plot_TI_Result(wsi, config['generation']-1, save_path = None)
-        # worker.contour_analysis(wsi, 0, save_path = None)
+        # worker.test_TATI(wsi, config['generation'], mode = 'selected')
+        # worker.plot_TI_Result(wsi, config['generation'], mode = 'selected')
+        # worker.train_generation(wsi, mode = 'selected', labeled=False)
+        # worker.test_all(wsi, config['generation'], mode = 'selected')
+        # for gen in range(config['generation']+1):
+        #     worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'pred')
+        #     if gen != 0:
+        #         worker.test_flip(wsi, gen, mode = 'selected')
+        #     worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'flip')
+        #     worker.test_TATI(wsi, gen, mode = 'selected')
+        #     worker.plot_TI_Result(wsi, gen, mode = 'selected')
+        # worker.contour_analysis(wsi, 0)
 
 
 if __name__ == "__main__":
