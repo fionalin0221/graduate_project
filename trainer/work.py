@@ -50,6 +50,7 @@ class Worker():
         self.classes = [class_list[i] for i in self.file_paths['classes']]
         self.class_num = len(self.classes)
         self.backbone = self.file_paths['backbone']
+        self.pretrain = self.file_paths['pretrain']
         self.batch_size = self.file_paths['batch_size']
         self.base_lr = float(self.file_paths['base_lr'])
 
@@ -82,7 +83,7 @@ class Worker():
         self.hcc_csv_dir = self.file_paths['HCC_csv_dir']
         self.cc_csv_dir = self.file_paths['CC_csv_dir']
 
-        self.pseudo_label_type = "contour"  # zscore/contour
+
 
         self.train_tfm = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -95,17 +96,17 @@ class Worker():
             transforms.ToTensor(),
         ])
 
-        self.multiplier = 4
+        self.multiplier = self.file_paths['multiplier']
     
     class TrainDataset(Dataset):
-        def __init__(self, data_dict, img_dir, classes, transform, state):
+        def __init__(self, data_dict, img_dir, classes, transform, state, multiplier=1):
             self.data_dict = data_dict
             self.img_dir = img_dir
             self.classes = classes
             self.transform = transform
             self.state = state
 
-            self.multiplier = 4  
+            self.multiplier = multiplier
 
         def __getitem__(self, index):
             big_index = index // self.multiplier
@@ -151,11 +152,11 @@ class Worker():
             return crop, label, img_path
 
         def __len__(self):
-            return 4 * len(self.data_dict["file_name"])
+            return self.multiplier * len(self.data_dict["file_name"])
             # return len(self.data_dict["file_name"])
     
     class TestDataset(Dataset):
-        def __init__(self, data_dict, img_dir, classes, transform, state, label_exist=True):
+        def __init__(self, data_dict, img_dir, classes, transform, state, label_exist=True, multiplier=1):
             
             self.data_dict = data_dict
             self.img_dir = img_dir
@@ -164,7 +165,7 @@ class Worker():
             self.label_exist = label_exist
             self.state = state
 
-            self.multiplier = 4
+            self.multiplier = multiplier
             
         def __getitem__(self, index):
             big_index = index // self.multiplier
@@ -211,7 +212,7 @@ class Worker():
                 return crop, img_name, corner_id
         
         def __len__(self):
-            return 4 * len(self.data_dict["file_name"])
+            return self.multiplier * len(self.data_dict["file_name"])
             # return len(self.data_dict["file_name"])
         
     def check_overlap(self, *lists):
@@ -472,9 +473,9 @@ class Worker():
             for h_wsi in self.hcc_old_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
-                h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
-                h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
+                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old", multiplier=self.multiplier)
+                h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old", multiplier=self.multiplier)
+                h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False, multiplier=self.multiplier)
 
                 train_datasets.append(h_train_dataset)
                 valid_datasets.append(h_valid_dataset)
@@ -502,9 +503,9 @@ class Worker():
             for c_wsi in self.cc_wsis:
                 selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
-                c_valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
-                c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+                c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                c_valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False, multiplier=self.multiplier)
 
                 train_datasets.append(c_train_dataset)
                 valid_datasets.append(c_valid_dataset)
@@ -529,9 +530,9 @@ class Worker():
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
+                train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", multiplier=self.multiplier)
+                valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", multiplier=self.multiplier)
+                test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False, multiplier=self.multiplier)
             
             elif self.type == "HCC":
                 if self.gen_type:
@@ -543,9 +544,9 @@ class Worker():
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
+                train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False, multiplier=self.multiplier)
             
             elif self.type == "CC":
                 if self.gen_type:
@@ -557,9 +558,9 @@ class Worker():
                 else:
                     selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+                train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False, multiplier=self.multiplier)
             else:
                 if self.test_state == "old":
                     if self.gen_type:
@@ -571,9 +572,9 @@ class Worker():
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                    test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", multiplier=self.multiplier)
+                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", multiplier=self.multiplier)
+                    test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False, multiplier=self.multiplier)
                 elif self.test_type == "HCC":
                     if self.gen_type:
                         selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}.csv')
@@ -584,9 +585,9 @@ class Worker():
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                    test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                    test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False, multiplier=self.multiplier)
                 else:
                     if self.gen_type:
                         selected_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}.csv')
@@ -597,9 +598,9 @@ class Worker():
                     else:
                         selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                    valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                    test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                    valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                    test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False, multiplier=self.multiplier)
 
             train_data.extend(pd.DataFrame(Train).to_dict(orient='records'))
             valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
@@ -624,14 +625,14 @@ class Worker():
                 Train = pd.read_csv(train_csv).to_dict(orient="list")
                 Valid = pd.read_csv(valid_csv).to_dict(orient="list")
                 if self.state == "old":
-                    train_dataset = self.TrainDataset(Train, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
-                    valid_dataset = self.TrainDataset(Valid, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
+                    train_dataset = self.TrainDataset(Train, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old", multiplier=self.multiplier)
+                    valid_dataset = self.TrainDataset(Valid, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old", multiplier=self.multiplier)
                 elif self.type == "HCC":
-                    train_dataset = self.TrainDataset(Train, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
-                    valid_dataset = self.TrainDataset(Valid, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
+                    train_dataset = self.TrainDataset(Train, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", multiplier=self.multiplier)
+                    valid_dataset = self.TrainDataset(Valid, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", multiplier=self.multiplier)
                 else:
-                    train_dataset = self.TrainDataset(Train, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
-                    valid_dataset = self.TrainDataset(Valid, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
+                    train_dataset = self.TrainDataset(Train, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", multiplier=self.multiplier)
+                    valid_dataset = self.TrainDataset(Valid, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", multiplier=self.multiplier)
                 return train_dataset, valid_dataset, None
             else:
                 print(train_csv, valid_csv)
@@ -1058,7 +1059,7 @@ class Worker():
             model = self.ViTWithLinear(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
-        if self.file_paths['pretrain']:
+        if self.pretrain:
             pretrain_model_path = self.file_paths['40WTC_model_path']
             model.load_state_dict(torch.load(pretrain_model_path, weights_only=True))
 
@@ -1099,8 +1100,12 @@ class Worker():
         modelName = f"{condition}_Model.ckpt"
         model_path = f"{save_path}/Model/{modelName}"
 
-        model = self.EfficientNetWithLinear(output_dim=self.class_num)
-        # model.load_state_dict(torch.load(model_path))
+        if self.backbone == "ViT":
+            model = self.ViTWithLinear(output_dim=self.class_num)
+        else:
+            model = self.EfficientNetWithLinear(output_dim=self.class_num)
+        if self.pretrain:
+            model.load_state_dict(torch.load(model_path))
         model.to(device)
         
         
@@ -1173,9 +1178,12 @@ class Worker():
             val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
         
             # Model setting and transfer learning or not
-            model = self.EfficientNetWithLinear(output_dim = self.class_num)
+            if self.backbone == "ViT":
+                model = self.ViTWithLinear(output_dim=self.class_num)
+            else:
+                model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
-                if self.file_paths['pretrain']:
+                if self.pretrain:
                     model_path = self.file_paths[f'{self.num_wsi}WTC_model_path']
                     model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
@@ -1405,7 +1413,10 @@ class Worker():
                 if not os.path.exists(model_path):
                     continue
 
-                model = self.EfficientNetWithLinear(output_dim = self.class_num)
+                if self.backbone == "ViT":
+                    model = self.ViTWithLinear(output_dim=self.class_num)
+                else:
+                    model = self.EfficientNetWithLinear(output_dim=self.class_num)
                 model.load_state_dict(torch.load(model_path, weights_only=True))
                 model.to(device)
 
@@ -1429,7 +1440,10 @@ class Worker():
         modelName = f"{condition}_Model.ckpt"
         model_path = f"{save_path}/Model/{modelName}"
 
-        model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+        if self.backbone == "ViT":
+            model = self.ViTWithLinear(output_dim=self.class_num)
+        else:
+            model = self.EfficientNetWithLinear(output_dim=self.class_num)
         model.load_state_dict(torch.load(model_path, weights_only=True))
         model.to(device)
 
@@ -1455,7 +1469,10 @@ class Worker():
                     model_path = self.file_paths['100WTC_model_path']
                 elif self.test_model == "3_class_40WTC":
                     model_path = self.file_paths['40WTC_model_path']
-                model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+                if self.backbone == "ViT":
+                    model = self.ViTWithLinear(output_dim=self.class_num)
+                else:
+                    model = self.EfficientNetWithLinear(output_dim=self.class_num)
                 # else:
                 #     model_path = self.file_paths['HCC_100WTC_model_path']
                 #     model = EfficientNet.from_name('efficientnet-b0')
@@ -1463,7 +1480,10 @@ class Worker():
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
                 model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
-                model = self.EfficientNetWithLinear(output_dim = self.class_num)
+                if self.backbone == "ViT":
+                    model = self.ViTWithLinear(output_dim=self.class_num)
+                else:
+                    model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -1472,7 +1492,10 @@ class Worker():
 
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
-            model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+            if self.backbone == "ViT":
+                model = self.ViTWithLinear(output_dim=self.class_num)
+            else:
+                model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1595,10 +1618,16 @@ class Worker():
                 condition = f'{self.class_num}_class'
                 if self.test_model == "3_class_100WTC":
                     model_path = self.file_paths['100WTC_model_path']
-                    model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+                    if self.backbone == "ViT":
+                        model = self.ViTWithLinear(output_dim=self.class_num)
+                    else:
+                        model = self.EfficientNetWithLinear(output_dim=self.class_num)
                 elif self.test_model == "3_class_40WTC":
                     model_path = self.file_paths['40WTC_model_path']
-                    model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+                    if self.backbone == "ViT":
+                        model = self.ViTWithLinear(output_dim=self.class_num)
+                    else:
+                        model = self.EfficientNetWithLinear(output_dim=self.class_num)
                 # else:
                 #     model_path = self.file_paths['HCC_100WTC_model_path']
                 #     model = EfficientNet.from_name('efficientnet-b0')
@@ -1606,7 +1635,10 @@ class Worker():
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
                 model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
-                model = self.EfficientNetWithLinear(output_dim = self.class_num)
+                if self.backbone == "ViT":
+                    model = self.ViTWithLinear(output_dim=self.class_num)
+                else:
+                    model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -1615,7 +1647,10 @@ class Worker():
 
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
-            model = self.EfficientNetWithLinear(output_dim = len(self.classes))
+            if self.backbone == "ViT":
+                model = self.ViTWithLinear(output_dim=self.class_num)
+            else:
+                model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
