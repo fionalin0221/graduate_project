@@ -13,7 +13,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torchvision.datasets import DatasetFolder
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc, roc_auc_score
 from skimage.morphology import dilation
 from skimage.segmentation import find_boundaries
 
@@ -94,6 +94,8 @@ class Worker():
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
         ])
+
+        self.multiplier = 4
     
     class TrainDataset(Dataset):
         def __init__(self, data_dict, img_dir, classes, transform, state):
@@ -103,10 +105,19 @@ class Worker():
             self.transform = transform
             self.state = state
 
+            self.multiplier = 4  
+
         def __getitem__(self, index):
-            label_text = self.data_dict["label"][index]
+            big_index = index // self.multiplier
+            corner_id = index % self.multiplier
+
+            label_text = self.data_dict["label"][big_index]
             label = self.classes.index(label_text)
-            img_name = self.data_dict["file_name"][index]
+            img_name = self.data_dict["file_name"][big_index]
+
+            # label_text = self.data_dict["label"][index]
+            # label = self.classes.index(label_text)
+            # img_name = self.data_dict["file_name"][index]
 
             if self.state == "old":
                 if label_text == "H":
@@ -117,15 +128,31 @@ class Worker():
                 img_path = os.path.join(self.img_dir, img_name)
             
             image = Image.open(img_path)
-            image = self.transform(image)
 
-            if self.data_dict["augment"][index]:
-                image = transforms.RandomRotation(degrees=(0, 360))(image)
+            w, h = image.size
+            crop_size = 224
 
-            return image, label, img_path
+            if corner_id == 0:
+                crop = image.crop((0, 0, crop_size, crop_size))
+            elif corner_id == 1:
+                crop = image.crop((w - crop_size, 0, w, crop_size))
+            elif corner_id == 2:
+                crop = image.crop((0, h - crop_size, crop_size, h))
+            elif corner_id == 3:
+                crop = image.crop((w - crop_size, h - crop_size, w, h))
+
+            # image = self.transform(image)
+            crop = self.transform(crop)
+            if self.data_dict["augment"][big_index]:
+                # image = transforms.RandomRotation(degrees=(0, 360))(image)
+                crop = transforms.RandomRotation(degrees=(0, 360))(crop)
+
+            # return image, label, img_path
+            return crop, label, img_path
 
         def __len__(self):
-            return len(self.data_dict["file_name"])
+            return 4 * len(self.data_dict["file_name"])
+            # return len(self.data_dict["file_name"])
     
     class TestDataset(Dataset):
         def __init__(self, data_dict, img_dir, classes, transform, state, label_exist=True):
@@ -136,12 +163,19 @@ class Worker():
             self.transform = transform
             self.label_exist = label_exist
             self.state = state
+
+            self.multiplier = 4
             
         def __getitem__(self, index):
-            img_name = self.data_dict["file_name"][index]
+            big_index = index // self.multiplier
+            corner_id = index % self.multiplier
+
+            img_name = self.data_dict["file_name"][big_index]
+            # img_name = self.data_dict["file_name"][index]
 
             if "label" in self.data_dict:
-                label_text = self.data_dict["label"][index]
+                # label_text = self.data_dict["label"][index]
+                label_text = self.data_dict["label"][big_index]
                 label = self.classes.index(label_text)
 
             if self.state == 'old':
@@ -154,15 +188,31 @@ class Worker():
                 image_path = os.path.join(self.img_dir, img_name)
 
             image = Image.open(image_path)
-            image = self.transform(image)
+            w, h = image.size
+            crop_size = 224
+
+            if corner_id == 0:
+                crop = image.crop((0, 0, crop_size, crop_size))
+            elif corner_id == 1:
+                crop = image.crop((w - crop_size, 0, w, crop_size))
+            elif corner_id == 2:
+                crop = image.crop((0, h - crop_size, crop_size, h))
+            elif corner_id == 3:
+                crop = image.crop((w - crop_size, h - crop_size, w, h))
+
+            crop = self.transform(crop)
+            # image = self.transform(image)
 
             if self.label_exist:
-                return image, label, img_name
+                # return image, label, img_name
+                return crop, label, img_name, corner_id
             else:
-                return image, img_name
+                # return image, img_name
+                return crop, img_name, corner_id
         
         def __len__(self):
-            return len(self.data_dict["file_name"])
+            return 4 * len(self.data_dict["file_name"])
+            # return len(self.data_dict["file_name"])
         
     def check_overlap(self, *lists):
         sets = [set(lst) for lst in lists]
@@ -1141,28 +1191,31 @@ class Worker():
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
-        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
         model.eval()
 
         # Record Information
         all_fnames = []
         all_preds = []
+        all_corners = []
 
         with torch.no_grad():
-            for imgs, fname in tqdm(test_loader):
+            for imgs, fname, corners in tqdm(test_loader):
                 # Inference
                 logits = model(imgs.to(device, non_blocking=True))
                 preds = torch.sigmoid(logits)
 
                 all_preds.append(preds.cpu())
                 all_fnames.extend(fname)
+                all_corners.extend(corners.numpy().tolist())
 
         # Concatenate once outside the loop
         all_preds = torch.cat(all_preds).numpy()
 
         # Build Predictions dict
-        Predictions = {"file_name": all_fnames}
+        # Predictions = {"file_name": all_fnames}
+        Predictions = {"file_name": all_fnames, "crop_id": all_corners}
         for idx, class_name in enumerate(self.classes):
             Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
         
@@ -1178,7 +1231,7 @@ class Worker():
         # pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
 
         results_df = {"file_name":[]}
-        all_labels, all_preds = [], []
+        all_labels, all_preds_labels = [], []
         match_df  = data_info_df[data_info_df['file_name'].isin(pred_df['file_name'])]
 
         filename_inRegion = match_df['file_name'].to_list()
@@ -1186,22 +1239,39 @@ class Worker():
 
         for idx, filename in enumerate(tqdm(filename_inRegion)):
             label = self.classes.index(label_inRegion[idx])
-            results_df["file_name"].append(filename)
-            row = pred_df[pred_df['file_name'] == filename]
-            preds = [row[f'{cl}_pred'].values[0] for cl in self.classes]
+            # results_df["file_name"].append(filename)
+            # row = pred_df[pred_df['file_name'] == filename]
+            # preds = [row[f'{cl}_pred'].values[0] for cl in self.classes]
 
-            over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
+            # over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
 
-            if len(over_threshold) == 1:
-                pred = over_threshold[0]
-            else:
-                pred = -1
+            # if len(over_threshold) == 1:
+            #     pred = over_threshold[0]
+            # else:
+            #     pred = -1
 
-            all_labels.append(label)
-            all_preds.append(pred)
+            # all_labels.append(label)
+            # all_preds_labels.append(pred)
+
+            for crop_id in range(self.multiplier):
+                results_df["file_name"].append(filename)
+
+                row = pred_df[(pred_df['file_name'] == filename) & (pred_df['crop_id'] == crop_id)]
+
+                preds = [row[f'{cl}_pred'].values[0] for cl in self.classes]
+
+                over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
+
+                if len(over_threshold) == 1:
+                    pred = over_threshold[0]
+                else:
+                    pred = -1
+
+                all_labels.append(label)
+                all_preds_labels.append(pred)
 
         text_labels = [self.classes[label] for label in all_labels]
-        text_preds = [self.classes[pred] for pred in all_preds]
+        text_preds = [self.classes[pred] for pred in all_preds_labels]
 
         results_df["true_label"] = text_labels
         results_df["pred_label"] = text_preds
@@ -1209,14 +1279,34 @@ class Worker():
         # Save to CSV
         pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv", index=False)
 
-        acc = accuracy_score(all_labels, all_preds)
+        acc = accuracy_score(all_labels, all_preds_labels)
         print("Accuracy: {:.4f}".format(acc))
 
-        cm = confusion_matrix(all_labels, all_preds, labels=range(len(self.classes)))
+        cm = confusion_matrix(all_labels, all_preds_labels, labels=range(len(self.classes)))
         title = f"Confusion Matrix of {condition}"
         self.plot_confusion_matrix(cm, save_path, condition, title)
 
+        y_true = np.array(all_labels)
+        y_score = pred_df[[f"{cl}_pred" for cl in self.classes]].values
+        print(y_true.shape, y_score.shape)
+
+        per_class_auc = {}
+        for i, class_name in enumerate(self.classes):
+            # One-vs-Rest labels
+            y_true_binary = (y_true == i).astype(int)
+            auc_i = roc_auc_score(y_true_binary, y_score[:, i])
+            per_class_auc[class_name] = auc_i
+
+        # Print results
+        for class_name, auc_val in per_class_auc.items():
+            print(f"AUC for {class_name}: {auc_val}")
+
+        self.plot_roc(y_true, y_score, save_path, condition)
+
         Test_Acc = {"Condition": [condition], "Accuracy": [acc]}
+        for class_name, auc_val in per_class_auc.items():
+            Test_Acc[f"{class_name}_AUC"] = [auc_val]
+
         for i, class_name in enumerate(self.classes):
             TP = cm[i, i]  # True Positives
             FN = cm[i, :].sum() - TP  # False Negatives
@@ -1253,7 +1343,7 @@ class Worker():
         
         test_data = []
         if self.state == "old":
-            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/old/{_wsi}_patch_in_region_filter_2_v2.csv')
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
         elif self.type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
@@ -1574,6 +1664,34 @@ class Worker():
 
         plt.subplots_adjust(top=0.85)
         plt.savefig(f"{save_path}/Metric/{condition}_confusion_matrix.png")
+        plt.close()
+
+    def plot_roc(self, y_true, y_score, save_path, condition):
+        plt.figure(figsize=(8, 6))
+
+        for i, class_name in enumerate(self.classes):
+            # One-vs-Rest labels
+            y_true_binary = (y_true == i).astype(int)
+            # Compute ROC curve
+            fpr, tpr, _ = roc_curve(y_true_binary, y_score[:, i])
+            # Compute AUC
+            roc_auc = auc(fpr, tpr)
+            # Plot
+            plt.plot(fpr, tpr, lw=2, label=f"{class_name} (AUC = {roc_auc:.4f})")
+
+        # Diagonal line for random guess
+        plt.plot([0, 1], [0, 1], "k--", lw=2)
+
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title(f"ROC Curve for {condition}")
+        plt.legend(loc="lower right")
+        plt.tight_layout()
+
+        # Save figure
+        plt.savefig(f"{save_path}/Metric/{condition}_ROC_per_class.png")
         plt.close()
 
     def plot_TI_Result(self, wsi, gen, save_path = None, mode = 'ideal'):
