@@ -41,15 +41,18 @@ def extract_offsets(csv_path):
     return offsets
 
 # 設定資料夾與 offset
-wsis = list(range(6, 27))
+# wsis = list(range(1, 27))
+wsis = [1, 4, 6, 7, 10, 11]
+# wsis = list(range(30, 92))
+
 
 for wsi in wsis:
     print(f"Processing {wsi}...")
-    offsets = extract_offsets(f"/workspace/Data/Datas/CSV/{wsi}.csv")
+    offsets = extract_offsets(f"/workspace/Data/Datas/Data/csv/{wsi}.csv")
     for label, (x_offset, y_offset) in offsets.items():
         # src_folder = f"/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced/{wsi}/{label}"
-        src_folder = f"/workspace/Data/Datas/temp/{wsi}/{label}"
-        dst_folder = f"/workspace/Data/Datas/temp/{wsi}/{label}"
+        src_folder = f"/workspace/Data/Datas/Data/Old_WSI_896/{wsi}/{label}"
+        dst_folder = f"/workspace/Data/Datas/Data/Old_WSI_896/{wsi}/{label}"
 
         os.makedirs(dst_folder, exist_ok=True)
 
@@ -62,6 +65,7 @@ for wsi in wsis:
                 continue
 
             match = re.match(rf"{label}-(\d+)-(\d+)-", fname)
+            # match = re.match(rf"C{wsi}_HCC-(\d+)-(\d+)-", fname)
             if not match:
                 print(f"Cannot extract: {fname}")
                 continue

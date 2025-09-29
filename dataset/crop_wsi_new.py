@@ -37,11 +37,11 @@ if current_computer == "docker":
 else:
     import openslide
 
-def save_patch(width, height, wsi_openslide, patches_save_path):
+def save_patch(width, height, wsi_openslide, patches_save_path, patch_size):
     try:
         # Read patch from WSI
         # for width in range(0, p_w*448, 448):
-        img = np.array(wsi_openslide.read_region((width, height), 0, (448, 448)))
+        img = np.array(wsi_openslide.read_region((width, height), 0, (patch_size, patch_size)))
         # Convert using OpenCV for faster processing
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -52,6 +52,8 @@ def save_patch(width, height, wsi_openslide, patches_save_path):
         print(f"Failed to save patch at ({width}, {height}): {e}")
         traceback.print_exc()
 
+patch_size = 448
+
 for wsi in wsis:
     try:
         print(f"Crop {type} WSI-{wsi}...")
@@ -61,8 +63,8 @@ for wsi in wsis:
         elif type == "CC":
             ndpi = f"{ndpi_path}/LIVER_1{wsi:04d}.ndpi"
         wsi_openslide = openslide.OpenSlide(ndpi)
-        p_w = wsi_openslide.dimensions[0] // 448 + 1
-        p_h = wsi_openslide.dimensions[1] // 448 + 1
+        p_w = wsi_openslide.dimensions[0] // patch_size + 1
+        p_h = wsi_openslide.dimensions[1] // patch_size + 1
         
         if type == "HCC":
             patches_save_path = os.path.join(file_paths[f'{type}_{state}_patches_save_path'], f"{wsi}")
@@ -77,9 +79,9 @@ for wsi in wsis:
         with ThreadPoolExecutor() as executor:
             futures = []
             print(f"Using {executor._max_workers} threads.")
-            for height in tqdm(range(0, p_h*448, 448)):
-                for width in range(0, p_w*448, 448):
-                    futures.append(executor.submit(save_patch, width, height, wsi_openslide, patches_save_path))
+            for height in tqdm(range(0, p_h*patch_size, patch_size)):
+                for width in range(0, p_w*patch_size, patch_size):
+                    futures.append(executor.submit(save_patch, width, height, wsi_openslide, patches_save_path, patch_size))
                     # img = np.array(wsi_openslide.read_region((width, height), 0, (448, 448)))
                     # img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
                     # cv2.imwrite(f"{patches_save_path}/{width}_{height}.tif", img)

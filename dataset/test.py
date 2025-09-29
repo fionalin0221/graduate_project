@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from sklearn.metrics import accuracy_score, confusion_matrix
 import os
+import cv2
+from tqdm import tqdm
 
 # print(torch.cuda.is_available())
 
@@ -248,3 +250,68 @@ def find_csv_duplicate():
     duplicates = df[df.duplicated(subset=["file_name"], keep=False)]
     print(duplicates)
 
+def diff_of_two_image():
+    img1 = cv2.imread("contour_filtered_result_copy.png", cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread("contour_filtered_result.png", cv2.IMREAD_GRAYSCALE)
+
+    diff_abs = cv2.absdiff(img1, img2)
+    cv2.imwrite("diff_abs.png", diff_abs)
+
+def threshold_classification_analysis():
+    classes = ["N", "H", "C"]
+    invalid_idx = len(classes)
+    classes_with_invalid = classes + ["Invalid"]
+
+    # Define the 5 invalid cases
+    invalid_cases = {
+        (0, 0, 0): "000",
+        (1, 1, 0): "110",
+        (1, 0, 1): "101",
+        (0, 1, 1): "011",
+        (1, 1, 1): "111",
+    }
+    # Create empty storage for all cases across all WSIs
+    case_data = {case: [] for case in invalid_cases.values()}
+
+    base_path = "/home/ipmclab-2/project/Results/Mix_NDPI/100WTC_Result/LP_3200/trial_1"
+
+    wsis = sorted(os.listdir(base_path))
+
+    for wsi in tqdm(wsis):
+        # if wsi in ["Data", "Loss", "Metric", "Model", "TI"]:
+        #     continue
+        if not wsi.isdigit():  # skip if not only numbers
+            continue
+        
+        condition = f"{wsi}_100WTC_LP3200_3_class_trial_1"
+
+        # Load the saved labels/predictions
+        df = pd.read_csv(f"{base_path}/TI/{wsi}_100WTC_LP3200_3_class_trial_1_patch_in_region_filter_2_v2_TI_with_threshold.csv")
+        df_labels = pd.read_csv(f"{base_path}/Metric/{condition}_labels_predictions.csv")
+        df_merged = df.merge(df_labels[["file_name", "true_label"]], on="file_name", how="left")
+
+        for _, row in df_merged.iterrows():
+            if row["sum_bin"] != 1:
+                case_key = (row["N_pred_bin"], row["H_pred_bin"], row["C_pred_bin"])
+                if case_key in invalid_cases:
+                    case_name = invalid_cases[case_key]
+
+                    # compute predicted label by argmax of [N_pred, H_pred, C_pred]
+                    preds = [row["N_pred"], row["H_pred"], row["C_pred"]]
+                    pred_label = classes[int(pd.Series(preds).idxmax())]
+
+                    case_data[case_name].append([
+                        wsi,
+                        row["file_name"],
+                        row["N_pred"],
+                        row["H_pred"],
+                        row["C_pred"],
+                        pred_label,
+                        row["true_label"]
+                    ])
+
+
+    for case_name, rows in case_data.items():
+        if rows:  # Only save if non-empty
+            df_out = pd.DataFrame(rows, columns=["WSI", "file_name", "N_pred", "H_pred", "C_pred", "pred_label","true_label"])
+            df_out.to_csv(f"{base_path}/invalid_case_{case_name}.csv", index=False)
