@@ -38,13 +38,12 @@ pts_ratio = 448
 class Worker():
     def __init__(self, config):
         current_computer = config['current_computer']
-        # only for 1 wsi
+
         self.type = config['type']
         self.state = config['state']
         self.gen_type = config['gen_type']
         self.generation = config["generation"]
 
-        # for multi wsi
         self.file_paths = config['computers'][current_computer]['file_paths']
         class_list = config["class_list"]
         self.classes = [class_list[i] for i in self.file_paths['classes']]
@@ -69,7 +68,6 @@ class Worker():
         else:
             self.save_dir = self.file_paths[f'{self.type}_WTC_result_save_path']
             self.save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}"
-            # self.save_path = f"{self.save_dir}/100WTC_Result"
             os.makedirs(self.save_dir, exist_ok=True)
             os.makedirs(self.save_path, exist_ok=True)
 
@@ -488,9 +486,9 @@ class Worker():
             for h_wsi in self.hcc_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
-                h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
-                h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
+                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new", multiplier=self.multiplier)
+                h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False, multiplier=self.multiplier)
 
                 train_datasets.append(h_train_dataset)
                 valid_datasets.append(h_valid_dataset)
@@ -1352,13 +1350,13 @@ class Worker():
         test_data = []
         if self.state == "old":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False, multiplier=self.multiplier)
         elif self.type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False, multiplier=self.multiplier)
         elif self.type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False, multiplier=self.multiplier)
 
         print(f"testing data number: {len(test_dataset)}")
 
