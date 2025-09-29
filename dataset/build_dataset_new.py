@@ -118,7 +118,7 @@ for wsi in wsis:
 
         save_file_name = (
             f"{wsi+91}/{wsi+91}_all_patches_filter_v2.csv" if (type == "HCC")
-            else f"{wsi}/1{wsi:04d}_all_patches_filter_v2_230.csv"
+            else f"{wsi}/1{wsi:04d}_all_patches_filter_v2.csv"
         )
 
         pd.DataFrame(Filter_Region).to_csv(f"{csv_dir}/{save_file_name}", index=False)
