@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models import vit_b_16, ViT_B_16_Weights
+from torch_ema import ExponentialMovingAverage as ema
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
@@ -878,6 +879,8 @@ class Worker():
         min_loss = 1000.
         max_acc = 0
 
+        ema_model = ema(model.parameters(), decay=self.file_paths['ema_decay'])
+
         train_loss_list = []
         train_acc_list = []
         valid_loss_list = []
@@ -923,6 +926,8 @@ class Worker():
                 loss.backward()
                 # Update the parameters with computed gradients.
                 optimizer.step()
+                # update EMA right after optimizer step
+                ema_model.update(model.parameters())
                 # Record the loss and accuracy.
                 train_loss.append(loss.cpu().item())
                 iter_train_loss_list.append(loss.cpu().item())
@@ -942,6 +947,9 @@ class Worker():
             # ---------- Validation ----------
             # Make sure the model is in eval mode so that some modules like dropout are disabled and work normally.
             model.eval()
+            # swap EMA weights for validation
+            ema_model.store()
+            ema_model.copy_to(model.parameters())
 
             # These are used to record information in validation.
             valid_loss = []
@@ -1008,6 +1016,7 @@ class Worker():
             training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
             validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_valid_iteration_log.csv", index=False)
             torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
+            # torch.save(ema_model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
 
             if valid_avg_loss < min_loss:
             # if valid_avg_acc > max_acc:
@@ -1015,9 +1024,12 @@ class Worker():
                 min_loss = valid_avg_loss
                 # max_acc = valid_avg_acc
                 torch.save(model.state_dict(), f"{model_save_path}/{modelName}")
+                # torch.save(ema_model.state_dict(), f"{model_save_path}/{modelName}")  # use EMA weights as "best"
                 notImprove = 0
             else:
                 notImprove = notImprove + 1
+
+            ema_model.restore()
 
             if epoch == min_epoch:
                 notImprove = 0
@@ -1378,6 +1390,9 @@ class Worker():
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             model.load_state_dict(torch.load(model_path, weights_only=True))
+            # ema_model = ema(model.parameters(), decay=self.file_paths['ema_decay'])
+            # ema_model.load_state_dict(torch.load(model_path, weights_only=True))
+            # ema_model.copy_to(model.parameters())
             model.to(device)
 
             self._test(test_dataset, data_info_df, model, save_path, condition)
