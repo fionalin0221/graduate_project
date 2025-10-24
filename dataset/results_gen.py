@@ -6,12 +6,13 @@ result_type = "CC"
 num_wsi = 40
 data_num = 3200
 num_trial = 4
+gen = 5
 num_class = 2
 
-# base_path = f"/workspace/Data/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-# base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
+# base_path = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+# base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv"
 
 # Define trials and WSIs
 # HCC_wsi_list = [195, 275, 298, 314]
@@ -37,7 +38,7 @@ HCC_wsi_list = []
 # HCC_wsi_list = [45, 49, 53, 57, 61, 65, 69, 72, 76, 80]
 CC_wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
 
-def add_results(file_path, cl, wsi, num_trial, results):
+def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
         return results  # Skip if file does not exist
@@ -45,23 +46,26 @@ def add_results(file_path, cl, wsi, num_trial, results):
     # Read the CSV file
     df = pd.read_csv(file_path)
 
+    # Extract required columns
     if {'Accuracy', f'{cl}_TP', f'{cl}_FN'}.issubset(df.columns):
         row = df.iloc[0][['Accuracy', f'{cl}_TP', f'{cl}_FN']]
-        results.append([num_trial, wsi, cl] + row.tolist())  # Add trial and WSI ID for reference
+        results.append([num_trial, wsi, gen, condition, cl] + row.tolist())  # Add trial and WSI ID for reference
     else:
         print(f"Missing columns in {file_path}")
 
     return results
 
 def collect_results(wsi, cl, results):
-    if len(wsi) == 5:
-        _wsi = int(wsi[-3:])
-        # file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_2_class_trial_{num_trial}_test_result.csv"
-        file_path = f"{base_path}/{_wsi}/trial_{num_trial}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_test_result.csv"
-    else:
-        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_1WTC_LP{data_num}_3_class_trial_{num_trial}_test_result.csv"
-    results = add_results(file_path, cl, wsi, num_trial, results)
+    file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_{num_class}_class_test_result.csv"
+    results = add_results(file_path, 0, cl, wsi, num_trial, "inference", results)
+    
+    for g in range(1, gen+1):
+        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_flip_test_result.csv"
+        results = add_results(file_path, g, cl, wsi, num_trial, "flip", results)
 
+        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_test_result.csv"
+        results = add_results(file_path, g, cl, wsi, num_trial, "inference", results)
+    
     return results
 
 # Initialize result list
