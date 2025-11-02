@@ -315,3 +315,19 @@ def threshold_classification_analysis():
         if rows:  # Only save if non-empty
             df_out = pd.DataFrame(rows, columns=["WSI", "file_name", "N_pred", "H_pred", "C_pred", "pred_label","true_label"])
             df_out.to_csv(f"{base_path}/invalid_case_{case_name}.csv", index=False)
+
+    
+def rename():
+    base_dir = "/home/ipmclab/project/Results/CC_NDPI/40WTC_Result/LP_3200/trial_4"  # <-- change to your root directory
+    old_str = "_trial_1_"
+    new_str = "_trial_4_"
+
+    for root, dirs, files in os.walk(base_dir):
+        for filename in files:
+            if old_str in filename:
+                old_path = os.path.join(root, filename)
+                new_filename = filename.replace(old_str, new_str)
+                new_path = os.path.join(root, new_filename)
+                
+                os.rename(old_path, new_path)
+                print(f"Renamed: {old_path} → {new_path}")
