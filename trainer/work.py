@@ -1150,6 +1150,7 @@ class Worker():
             criterion = nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
+            print(f"Generation {gen}")
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
 
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
@@ -1320,15 +1321,15 @@ class Worker():
                 # Prepare Model
                 if self.state == "old":
                     _model_wsi = model_wsi
-                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{test_model_trial}"
+                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.test_model_trial}"
                 elif self.type == "HCC":
                     _model_wsi = model_wsi + 91
-                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{test_model_trial}"
+                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{self.test_model_trial}"
                 elif self.type == "CC":
                     _model_wsi = f"1{model_wsi:04d}"
-                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{test_model_trial}"
+                    model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.test_model_trial}"
 
-                modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{test_model_trial}_Model.ckpt"
+                modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.test_model_trial}_Model.ckpt"
                 model_path = f"{model_dir}/Model/{modelName}"
 
                 if self.backbone == "ViT":
@@ -1643,12 +1644,10 @@ class Worker():
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            if self.test_model == "self" or self.test_model == "multi_wsi" or self.test_model == "multi_epoch":
-                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
-                save_path = save_dir
+            if self.num_wsi == 1:
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
             else:
-                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
-                save_path = f"{save_dir}/{__wsi}" 
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
         
         if self.test_model == "multi_wsi":
             _condition = f'{__wsi}_{condition}_for_wsi_{self.test_model_wsis[0]}'
@@ -1678,12 +1677,12 @@ class Worker():
             x = (int(x)) // self.patch_size
             y = (int(y)) // self.patch_size
             
+            gt_label = self.classes.index(df['true_label'][idx])
             if self.test_state == "old":
                 dx, dy = shift_map[gt_label]
                 x += dx
                 y += dy
             
-            gt_label = self.classes.index(df['true_label'][idx])
             if df['pred_label'][idx] != -1:
                 pred_label  = self.classes.index(df['pred_label'][idx])
                 
