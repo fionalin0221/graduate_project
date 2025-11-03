@@ -21,19 +21,19 @@ def main():
     # worker.test()
     # worker.contour_analysis_multi()
     for wsi in wsis:
-        worker.train_one_WSI(wsi)
-        worker.test_one_WSI(wsi)
-        # worker.test_TATI(wsi, config['generation'], mode = 'selected')
-        # worker.plot_TI_Result(wsi, config['generation'], mode = 'selected')
-        # worker.train_generation(wsi, mode = 'selected', labeled=False)
-        # worker.test_all(wsi, config['generation'], mode = 'selected')
-        # for gen in range(config['generation']+1):
-        #     worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'pred')
-        #     if gen != 0:
-        #         worker.test_flip(wsi, gen, mode = 'selected')
-        #     worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'flip')
-        #     worker.test_TATI(wsi, gen, mode = 'selected')
-        #     worker.plot_TI_Result(wsi, gen, mode = 'selected')
+        # worker.train_one_WSI(wsi)
+        # worker.test_one_WSI(wsi)
+        # worker.test_TATI(wsi, 0)
+        # worker.plot_TI_Result(wsi, 0)
+        worker.train_generation(wsi, mode = 'selected', labeled=False)
+        worker.test_all(wsi, config['generation'], mode = 'selected')
+        for gen in range(config['generation']+1):
+            worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'pred', plot_heatmap = True)
+            if gen != 0:
+                worker.test_flip(wsi, gen, mode = 'selected')
+                worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'flip')
+            worker.test_TATI(wsi, gen, mode = 'selected')
+            worker.plot_TI_Result(wsi, gen, mode = 'selected')
         # worker.contour_analysis(wsi, 0)
 
 

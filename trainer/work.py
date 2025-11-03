@@ -804,6 +804,7 @@ class Worker():
 
         plt.title("Train vs Valid Loss & Accuracy")
         plt.savefig(f"{save_path}/{condition}_loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
+        plt.close()
     
     def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class):
         n_epochs = self.file_paths['max_epoch']
@@ -1761,9 +1762,10 @@ class Worker():
         plt.axis("off")
 
         plt.savefig(f"{save_path}/Metric/{_condition}_pred_vs_gt.png")
+        plt.close()
         print(f"WSI {wsi} already plot the pred_vs_gt image")
 
-    def plot_all_result(self, wsi, gen, save_path = None, mode = 'selected', plot_type = 'pred'):
+    def plot_all_result(self, wsi, gen, save_path = None, mode = 'selected', plot_type = 'pred', plot_heatmap = False):
         if save_path == None:
             _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
             __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
@@ -1793,6 +1795,7 @@ class Worker():
 
         ### Get (x, y, pseudo-label) of every patch ###
         all_pts = []
+        all_preds = []
         if 'label' in df:
             for idx, img_name in enumerate(all_patches):
                 x, y = img_name[:-4].split('_')
@@ -1823,6 +1826,7 @@ class Worker():
                 y = (int(y)) // self.patch_size
 
                 all_pts.append([x, y, pred_label+1])
+                all_preds.append([x, y, row])
 
         all_pts = np.array(all_pts)
         x_max, y_max = np.max(all_pts[:, 0]), np.max(all_pts[:, 1])
@@ -1871,7 +1875,58 @@ class Worker():
         plt.axis("off")
 
         plt.savefig(f"{save_path}/Metric/{_condition}_{plot_type}.png")
+        plt.close()
         print(f"WSI {wsi} already plot the {plot_type} image")
+
+        if plot_heatmap and len(all_preds) > 0:
+            heatmap = np.zeros((y_max + 1, x_max + 1, 3), dtype=np.float32)
+            per_class_maps = {cl: np.zeros((y_max + 1, x_max + 1), dtype=np.float32) for cl in self.classes}
+
+            for x, y, row in all_preds:
+                for i, cl in enumerate(self.classes):
+                    per_class_maps[cl][y, x] = row[i]
+
+                if self.class_num == 2:
+                    if self.test_type == "HCC":
+                        heatmap[y, x, 0] = row[1]  # R = HCC
+                        heatmap[y, x, 1] = row[0]  # G = Normal
+                        heatmap[y, x, 2] = 0
+                    elif self.test_type == "CC":
+                        heatmap[y, x, 0] = 0
+                        heatmap[y, x, 1] = row[0]  # G = Normal
+                        heatmap[y, x, 2] = row[1]  # B = CC
+                elif self.class_num == 3:
+                    # --- Three-class (Normal, HCC, CC) ---
+                    heatmap[y_patch, x_patch, 0] = row[1]  # R = HCC
+                    heatmap[y_patch, x_patch, 1] = row[0]  # G = Normal
+                    heatmap[y_patch, x_patch, 2] = row[2]  # B = CC
+                
+            plt.figure(figsize=(x_max/10, y_max/10))
+            plt.imshow(heatmap, interpolation='nearest')
+            plt.title(f'Combined probability heatmap for WSI {__wsi}', fontsize=20, pad=20)
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"{save_path}/Metric/{_condition}_combined_heatmap.png")
+            plt.close()
+            print(f"WSI {wsi} combined heatmap saved.")
+
+            # ---------- Save per-class heatmaps ----------
+            color_map = {
+                'N': 'Greens',
+                'H': 'Reds',
+                'C': 'Blues'
+            }
+            for cl in self.classes:
+                plt.figure(figsize=(x_max/10, y_max/10))
+                cmap_name = color_map.get(cl, 'gray')
+                plt.imshow(per_class_maps[cl], cmap=cmap_name, vmin=0, vmax=1, interpolation='nearest')
+                plt.colorbar(label=f'{cl} probability', shrink=0.7)
+                plt.title(f'{cl} heatmap for WSI {__wsi}', fontsize=20, pad=20)
+                plt.axis('off')
+                plt.tight_layout()
+                plt.savefig(f"{save_path}/Metric/{_condition}_{cl}_heatmap.png")
+                plt.close()
+                print(f"WSI {wsi} per-class heatmap for {cl} saved.")
 
     def plot_TI_Result_gt_boundary(self, wsi, gen, save_path):
         if save_path == None:
@@ -1965,3 +2020,4 @@ class Worker():
         plt.savefig(f"{save_path}/Metric/{wsi}_pred_vs_gt.png")
         plt.tight_layout()
         plt.axis("off")
+        plt.close()
