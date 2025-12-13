@@ -18,7 +18,7 @@ def main():
     worker = Worker(config)
     # worker.train()
     # worker.train_multi_model()
-    worker.train_generation(mode = 'selected', labeled = False,  replay = True)
+    worker.train_generation(mode = 'selected', labeled = True,  replay = True)
     # worker.test()
     # worker.contour_analysis_multi()
     # for wsi in wsis:

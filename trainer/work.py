@@ -619,16 +619,21 @@ class Worker():
                 print(test_csv)
                 raise FileNotFoundError("test CSV not found")
 
-    def build_pl_dataset(self, wsi, gen, save_path, mode, labeled):
+    def build_pl_dataset(self, wsi, gen, save_path, mode, labeled, test_state=None, test_type=None):
         '''
         selected_patches: patches that is in some class of contour, but the label of patch may not the same as the contour label.
         
         '''
-        if self.test_state == "old":
+        if test_state == None:
+            test_state = self.test_state
+        if test_type == None:
+            test_type = self.test_type
+
+        if test_state == "old":
             _wsi = wsi
-        elif self.test_type == "HCC":
+        elif test_type == "HCC":
             _wsi = wsi + 91
-        elif self.test_type == "CC":
+        elif test_type == "CC":
             _wsi = f"1{wsi:04d}"
 
         if gen == 1:
@@ -651,7 +656,7 @@ class Worker():
         ### Get (x, y, pseudo-label) of every patch ###
         all_pts = []
         for idx, img_name in enumerate(all_patches):
-            if self.state == "old":
+            if test_state == "old":
                 match = re.search(r'-(\d+)-(\d+)-\d{5}x\d{5}', img_name)
                 if match:
                     x = match.group(1)
@@ -1176,10 +1181,10 @@ class Worker():
 
     def prepare_pl_dataset_one_WSI(self, wsi, _wsi, gen, save_path, mode, labeled, condition, state, wsi_type):
         if labeled:
-            self.test_TATI(wsi, gen-1, save_path, mode, state, wsi_type)
+            self.test_TATI(wsi, gen-1, save_path, mode, test_state=state, test_type=wsi_type)
         else:
-            self.test_all(wsi, gen-1, save_path, mode, state, wsi_type)
-        self.build_pl_dataset(wsi, gen, save_path, mode, labeled)
+            self.test_all(wsi, gen-1, save_path, mode, test_state=state, test_type=wsi_type)
+        self.build_pl_dataset(wsi, gen, save_path, mode, labeled, test_state=state, test_type=wsi_type)
         
         # Read TI.csv, prepare Dataframe
         train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode, state, wsi_type)
