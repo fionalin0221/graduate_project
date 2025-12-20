@@ -53,6 +53,8 @@ class Worker():
         self.pretrain = self.file_paths['pretrain']
         self.batch_size = self.file_paths['batch_size']
         self.base_lr = float(self.file_paths['base_lr'])
+        self.model_save_freq = self.file_paths['model_save_freq']
+        self.valid_percentage = self.file_paths['valid_percentage']
 
         self.data_num = self.file_paths['data_num']
         self.num_trial = self.file_paths['num_trial']  
@@ -343,7 +345,7 @@ class Worker():
         train, val, test = [], [], []
         for num in range(len(self.classes)):
             if len(datas[num]) > 0:
-                train_, val_ = train_test_split(datas[num], test_size=0.2, random_state=0)  # 80:20 split
+                train_, val_ = train_test_split(datas[num], test_size=self.valid_percentage, random_state=0)  # 80:20 split
                 # val_, test_ = train_test_split(temp, test_size=0.5, random_state=0)  # 50:50 split on 20% = 10% each
                 
                 train.append(train_)
@@ -434,7 +436,7 @@ class Worker():
         else:
             data_num = self.data_num
 
-        print(f"Patches use for a WSI: {self.data_num}")
+        print(f"Patches use for a WSI: {data_num}")
 
         if wsi == None:
             for h_wsi in self.hcc_old_wsis:
@@ -581,20 +583,25 @@ class Worker():
 
         return train_dataset, valid_dataset, test_dataset  
 
-    def load_datasets(self, save_path, condition, data_stage, wsi):
+    def load_datasets(self, save_path, condition, data_stage, wsi, state=None, wsi_type=None):
         train_csv = f"{save_path}/{condition}_train.csv"
         valid_csv = f"{save_path}/{condition}_valid.csv"
         test_csv  = f"{save_path}/{condition}_test.csv"
+
+        if state == None:
+            state = self.state
+        if wsi_type == None:
+            wsi_type = self.wsi_type
 
         if data_stage == "train":
             if os.path.exists(train_csv) and os.path.exists(valid_csv):
                 # read from existing files
                 Train = pd.read_csv(train_csv).to_dict(orient="list")
                 Valid = pd.read_csv(valid_csv).to_dict(orient="list")
-                if self.state == "old":
+                if state == "old":
                     train_dataset = self.TrainDataset(Train, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
                     valid_dataset = self.TrainDataset(Valid, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
-                elif self.wsi_type == "HCC":
+                elif wsi_type == "HCC":
                     train_dataset = self.TrainDataset(Train, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
                     valid_dataset = self.TrainDataset(Valid, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
                 else:
@@ -848,7 +855,7 @@ class Worker():
         iter_train_loss_list = []
         iter_valid_loss_list = []
 
-        for epoch in range(1, n_epochs+1):
+        for epoch in range(2, n_epochs+1):
             # ---------- Training ----------
             # Make sure the model is in train mode before training.
             model.train()
@@ -910,6 +917,9 @@ class Worker():
             # swap EMA weights for validation
             ema_model.store()
             ema_model.copy_to(model.parameters())
+
+            if epoch % self.model_save_freq == 0:
+                torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
 
             # These are used to record information in validation.
             valid_loss = []
@@ -975,8 +985,7 @@ class Worker():
             training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
             training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
             validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_valid_iteration_log.csv", index=False)
-            if epoch % 5 == 0:
-                torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
+
             # torch.save(ema_model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
 
             if valid_avg_loss < min_loss:
@@ -1187,7 +1196,7 @@ class Worker():
         self.build_pl_dataset(wsi, gen, save_path, mode, labeled, test_state=state, test_type=wsi_type)
         
         # Read TI.csv, prepare Dataframe
-        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode, state, wsi_type)
+        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", gen, "train", wsi, mode, state, wsi_type)
 
         return train_dataset, valid_dataset
 
@@ -1202,43 +1211,65 @@ class Worker():
 
         for gen in range(1, self.generation+1):
             condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
-            print(condition)
 
             train_datasets = []
             valid_datasets = []
 
             for wsi in self.hcc_old_wsis:
                 _wsi = wsi
-                train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi ,_wsi, gen, save_path, mode, labeled, condition, 'old', 'HCC')
+                if self.file_paths['load_dataset']:
+                    train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='old', wsi_type='HCC')
+                else:
+                    train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi ,_wsi, gen, save_path, mode, labeled, condition, 'old', 'HCC')
                 train_datasets.append(train_dataset)
                 valid_datasets.append(valid_dataset)
             for wsi in self.hcc_wsis:
                 _wsi = wsi + 91
-                train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi, _wsi, gen, save_path, mode, labeled, condition, 'new', 'HCC')
+                if self.file_paths['load_dataset']:
+                    train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='HCC')
+                else:
+                    train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi, _wsi, gen, save_path, mode, labeled, condition, 'new', 'HCC')
                 train_datasets.append(train_dataset)
                 valid_datasets.append(valid_dataset)
             for wsi in self.cc_wsis:
                 _wsi = f"1{wsi:04d}"
-                train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi, _wsi, gen, save_path, mode, labeled, condition, 'new', 'CC')
+                if self.file_paths['load_dataset']:
+                    train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='CC')
+                else:
+                    train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi, _wsi, gen, save_path, mode, labeled, condition, 'new', 'CC')
                 train_datasets.append(train_dataset)
                 valid_datasets.append(valid_dataset)
 
             if replay:
                 for wsi in self.replay_hcc_old_wsis:
-                    train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, state='old', wsi_type='HCC')
+                    _wsi = wsi
+                    if self.file_paths['load_dataset']:
+                        train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='old', wsi_type='HCC')
+                    else:
+                        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state='old', wsi_type='HCC', replay=True)
                     train_datasets.append(train_dataset)
                     valid_datasets.append(valid_dataset)
                 for wsi in self.replay_hcc_wsis:
-                    train_dataset, valid_dataset, _  = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, state='new', wsi_type='HCC')
+                    _wsi = wsi + 91
+                    if self.file_paths['load_dataset']:
+                        train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='HCC')
+                    else:
+                        train_dataset, valid_dataset, _  = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state='new', wsi_type='HCC', replay=True)
                     train_datasets.append(train_dataset)
                     valid_datasets.append(valid_dataset)
                 for wsi in self.replay_cc_wsis:
-                    train_dataset, valid_dataset, _  = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, state='new', wsi_type='CC')
+                    _wsi = f"1{wsi:04d}"
+                    if self.file_paths['load_dataset']:
+                        train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='CC')
+                    else:
+                        train_dataset, valid_dataset, _  = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state='new', wsi_type='CC', replay=True)
                     train_datasets.append(train_dataset)
                     valid_datasets.append(valid_dataset)
             
             combined_train = ConcatDataset(train_datasets)
             combined_val = ConcatDataset(valid_datasets)
+
+            print(f"training data number: {len(combined_train)}, validation data number: {len(combined_val)}")
 
             train_loader = DataLoader(combined_train, batch_size=self.batch_size, shuffle=True)
             val_loader = DataLoader(combined_val, batch_size=self.batch_size, shuffle=False)
@@ -1250,7 +1281,8 @@ class Worker():
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
                 if self.pretrain:
-                    model_path = self.file_paths[f'{self.test_model}_model_path']
+                    # model_path = self.file_paths[f'{self.test_model}_model_path']
+                    model_path = f"{save_path}/Model/Gen1_ND_zscore_{mode}_patches_by_Gen0_{self.num_wsi}WTC.ckpt"
                     model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
                 model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_{self.num_wsi}WTC.ckpt"
@@ -1274,6 +1306,7 @@ class Worker():
         all_fnames = []
         all_preds = []
 
+        # with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
         with torch.no_grad():
             for imgs, fname in tqdm(test_loader):
                 # Inference
