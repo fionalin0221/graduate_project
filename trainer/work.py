@@ -1300,40 +1300,40 @@ class Worker():
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
         test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
-        model.eval()
+        # model.eval()
 
-        # Record Information
-        all_fnames = []
-        all_preds = []
+        # # Record Information
+        # all_fnames = []
+        # all_preds = []
 
-        # with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-        with torch.no_grad():
-            for imgs, fname in tqdm(test_loader):
-                # Inference
-                logits = model(imgs.to(device, non_blocking=True))
-                preds = torch.sigmoid(logits)
+        # # with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+        # with torch.no_grad():
+        #     for imgs, fname in tqdm(test_loader):
+        #         # Inference
+        #         logits = model(imgs.to(device, non_blocking=True))
+        #         preds = torch.sigmoid(logits)
 
-                all_preds.append(preds.cpu())
-                all_fnames.extend(fname)
+        #         all_preds.append(preds.cpu())
+        #         all_fnames.extend(fname)
 
-        # Concatenate once outside the loop
-        all_preds = torch.cat(all_preds).numpy()
+        # # Concatenate once outside the loop
+        # all_preds = torch.cat(all_preds).numpy()
 
-        # Build Predictions dict
-        Predictions = {"file_name": all_fnames}
-        for idx, class_name in enumerate(self.classes):
-            Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
+        # # Build Predictions dict
+        # Predictions = {"file_name": all_fnames}
+        # for idx, class_name in enumerate(self.classes):
+        #     Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
         
-        pred_df = pd.DataFrame(Predictions)
+        # pred_df = pd.DataFrame(Predictions)
 
-        if count_acc:
-            pred_df.to_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
-        else:
-            pred_df.to_csv(f"{save_path}/TI/{condition}_all_patches_filter_v2_TI.csv", index=False)
-            return
+        # if count_acc:
+        #     pred_df.to_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
+        # else:
+        #     pred_df.to_csv(f"{save_path}/TI/{condition}_all_patches_filter_v2_TI.csv", index=False)
+        #     return
 
         # pred_df = pd.read_csv(f"{save_path}/Metric/{condition}_pred_score.csv")
-        # pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
+        pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
 
         results_df = {"file_name":[]}
         all_labels, all_preds_labels = [], []
@@ -1358,8 +1358,9 @@ class Worker():
             all_labels.append(label)
             all_preds_labels.append(pred)
 
+        all_classes = ['unknown'] + self.classes
         text_labels = [self.classes[label] for label in all_labels]
-        text_preds = [self.classes[pred] for pred in all_preds_labels]
+        text_preds = [all_classes[pred+1] for pred in all_preds_labels]
 
         results_df["true_label"] = text_labels
         results_df["pred_label"] = text_preds
@@ -1370,9 +1371,12 @@ class Worker():
         acc = accuracy_score(all_labels, all_preds_labels)
         print("Accuracy: {:.4f}".format(acc))
 
-        cm = confusion_matrix(all_labels, all_preds_labels, labels=range(len(self.classes)))
+        y_true_mapped = [l + 1 for l in all_labels]
+        y_score_mapped = [p + 1 for p in all_preds_labels]
+
+        cm = confusion_matrix(y_true_mapped, y_score_mapped, labels=range(len(all_classes)))
         title = f"Confusion Matrix of {condition}"
-        self.plot_confusion_matrix(cm, save_path, condition, title)
+        self.plot_confusion_matrix(cm, save_path, condition, all_classes, title)
 
         y_true = np.array(all_labels)
         y_score = pred_df[[f"{cl}_pred" for cl in self.classes]].values
@@ -1381,7 +1385,10 @@ class Worker():
         for i, class_name in enumerate(self.classes):
             # One-vs-Rest labels
             y_true_binary = (y_true == i).astype(int)
-            auc_i = roc_auc_score(y_true_binary, y_score[:, i])
+            if len(np.unique(y_true_binary)) > 1:
+                auc_i = roc_auc_score(y_true_binary, y_score[:, i])
+            else:
+                auc_i = float('nan')  # AUC is not defined in this case
             per_class_auc[class_name] = auc_i
 
         # Print results
@@ -1395,9 +1402,10 @@ class Worker():
             Test_Acc[f"{class_name}_AUC"] = [auc_val]
 
         for i, class_name in enumerate(self.classes):
-            TP = cm[i, i]  # True Positives
-            FN = cm[i, :].sum() - TP  # False Negatives
-            FP = cm[:, i].sum() - TP  # False Positives
+            cm_idx = i+1
+            TP = cm[cm_idx, cm_idx]  # True Positives
+            FN = cm[cm_idx, :].sum() - TP  # False Negatives
+            FP = cm[:, cm_idx].sum() - TP  # False Positives
             TN = cm.sum() - (TP + FP + FN)  # True Negatives
             
             Test_Acc[f"{class_name}_TP"] = [TP]
@@ -1751,15 +1759,16 @@ class Worker():
 
         self._test(test_dataset, data_info_df, model, save_path, _condition, count_acc=False)
 
-    def plot_confusion_matrix(self, cm, save_path, condition, title='Confusion Matrix'):
+    def plot_confusion_matrix(self, cm, save_path, condition, all_classes, title='Confusion Matrix'):
         fig, ax = plt.subplots(figsize=(8, 6))
         cax = ax.matshow(cm, cmap='Blues')
         fig.colorbar(cax)
 
-        ax.set_xticks(np.arange(self.class_num))
-        ax.set_yticks(np.arange(self.class_num))
-        ax.set_xticklabels(self.classes, fontsize=14)
-        ax.set_yticklabels(self.classes, fontsize=14)
+        num_classes = len(all_classes)
+        ax.set_xticks(np.arange(num_classes))
+        ax.set_yticks(np.arange(num_classes))
+        ax.set_xticklabels(all_classes, fontsize=14)
+        ax.set_yticklabels(all_classes, fontsize=14)
 
         for i in range(cm.shape[0]):
             for j in range(cm.shape[1]):
@@ -1780,12 +1789,13 @@ class Worker():
         for i, class_name in enumerate(self.classes):
             # One-vs-Rest labels
             y_true_binary = (y_true == i).astype(int)
-            # Compute ROC curve
-            fpr, tpr, _ = roc_curve(y_true_binary, y_score[:, i])
-            # Compute AUC
-            roc_auc = auc(fpr, tpr)
-            # Plot
-            plt.plot(fpr, tpr, lw=2, label=f"{class_name} (AUC = {roc_auc:.4f})")
+            if len(np.unique(y_true_binary)) > 1:
+                # Compute ROC curve
+                fpr, tpr, _ = roc_curve(y_true_binary, y_score[:, i])
+                # Compute AUC
+                roc_auc = auc(fpr, tpr)
+                # Plot
+                plt.plot(fpr, tpr, lw=2, label=f"{class_name} (AUC = {roc_auc:.4f})")
 
         # Diagonal line for random guess
         plt.plot([0, 1], [0, 1], "k--", lw=2)
@@ -1856,15 +1866,16 @@ class Worker():
                 x += dx
                 y += dy
             
-            if df['pred_label'][idx] != -1:
+            if df['pred_label'][idx] != 'unknown':
                 pred_label  = self.classes.index(df['pred_label'][idx])
                 
                 if pred_label == gt_label:
                     label = pred_label + 1  # correct predict: encode as 1,2,3
                 else:
                     label = 10 * (gt_label + 1) + (pred_label + 1)  # wrong predict：encode asss 11,12,13, 21,22,23, 31,32,33
-
-                all_pts.append([x, y, label])
+            else:
+                label = -1
+            all_pts.append([x, y, label])
 
         all_pts = np.array(all_pts)
 
@@ -1884,7 +1895,8 @@ class Worker():
                 21: 'cyan',     # HCC -> Normal
                 23: 'magenta',  # HCC -> CC
                 31: 'purple',   # CC -> Normal
-                32: 'brown'     # CC -> HCC
+                32: 'brown',    # CC -> HCC
+                -1: 'lightgrey' # No Prediction
             }
             legend_elements = [
                 plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
@@ -1977,14 +1989,14 @@ class Worker():
         if 'label' in df:
             for idx, img_name in enumerate(all_patches):
                 x, y = img_name[:-4].split('_')
+                x = (int(x)) // self.patch_size
+                y = (int(y)) // self.patch_size
 
-                if df['label'][idx] != -1:
-                    pred_label  = self.classes.index(df['label'][idx])  # N=0, H=1
-
-                    x = (int(x)) // self.patch_size
-                    y = (int(y)) // self.patch_size
-
-                    all_pts.append([x, y, pred_label+1])
+                if df['label'][idx] != 'unknown':
+                    pred_label  = self.classes.index(df['label'][idx])
+                else:
+                    pred_label = -1
+                all_pts.append([x, y, pred_label+1])
 
         else:
             pred_cols = [f"{cl}_pred" for cl in self.classes]
@@ -2030,9 +2042,10 @@ class Worker():
         # --- Color map ---
         if self.class_num == 3:
             color_map = {
-                1: 'green',     # True Normal
-                2: 'red',       # True HCC
-                3: 'blue',      # True CC
+                0: 'lightgrey', # No Prediction
+                1: 'green',     # Pred Normal
+                2: 'red',       # Pred HCC
+                3: 'blue',      # Pred CC
             }
             legend_elements = [
                 plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
@@ -2042,8 +2055,8 @@ class Worker():
         elif self.class_num == 2:
             if self.test_type == "HCC":
                 color_map = {
-                    1: 'green',     # True Normal
-                    2: 'red',       # True HCC
+                    1: 'green',     # Pred Normal
+                    2: 'red',       # Pred HCC
                 }
                 legend_elements = [
                     plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
@@ -2051,8 +2064,8 @@ class Worker():
                 ]
             elif self.test_type == "CC":
                 color_map = {
-                    1: 'green',     # True Normal
-                    2: 'blue',      # True CC
+                    1: 'green',     # Pred Normal
+                    2: 'blue',      # Pred CC
                 }
                 legend_elements = [
                     plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
