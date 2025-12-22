@@ -1300,40 +1300,40 @@ class Worker():
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
         test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
-        # model.eval()
+        model.eval()
 
-        # # Record Information
-        # all_fnames = []
-        # all_preds = []
+        # Record Information
+        all_fnames = []
+        all_preds = []
 
-        # # with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-        # with torch.no_grad():
-        #     for imgs, fname in tqdm(test_loader):
-        #         # Inference
-        #         logits = model(imgs.to(device, non_blocking=True))
-        #         preds = torch.sigmoid(logits)
+        # with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+        with torch.no_grad():
+            for imgs, fname in tqdm(test_loader):
+                # Inference
+                logits = model(imgs.to(device, non_blocking=True))
+                preds = torch.sigmoid(logits)
 
-        #         all_preds.append(preds.cpu())
-        #         all_fnames.extend(fname)
+                all_preds.append(preds.cpu())
+                all_fnames.extend(fname)
 
-        # # Concatenate once outside the loop
-        # all_preds = torch.cat(all_preds).numpy()
+        # Concatenate once outside the loop
+        all_preds = torch.cat(all_preds).numpy()
 
-        # # Build Predictions dict
-        # Predictions = {"file_name": all_fnames}
-        # for idx, class_name in enumerate(self.classes):
-        #     Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
+        # Build Predictions dict
+        Predictions = {"file_name": all_fnames}
+        for idx, class_name in enumerate(self.classes):
+            Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
         
-        # pred_df = pd.DataFrame(Predictions)
+        pred_df = pd.DataFrame(Predictions)
 
-        # if count_acc:
-        #     pred_df.to_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
-        # else:
-        #     pred_df.to_csv(f"{save_path}/TI/{condition}_all_patches_filter_v2_TI.csv", index=False)
-        #     return
+        if count_acc:
+            pred_df.to_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
+        else:
+            pred_df.to_csv(f"{save_path}/TI/{condition}_all_patches_filter_v2_TI.csv", index=False)
+            return
 
         # pred_df = pd.read_csv(f"{save_path}/Metric/{condition}_pred_score.csv")
-        pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
+        # pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
 
         results_df = {"file_name":[]}
         all_labels, all_preds_labels = [], []
