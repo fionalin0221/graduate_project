@@ -27,6 +27,7 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models import vit_b_16, ViT_B_16_Weights
 from torch_ema import ExponentialMovingAverage as ema
+import timm
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
@@ -813,6 +814,30 @@ class Worker():
             output = self.fc(features)
             return output
 
+    class ViTWithLinearTiny(nn.Module):
+        def __init__(self, output_dim, pretrain=True):
+            super().__init__()
+
+            self.backbone = timm.create_model(
+                'vit_tiny_patch16_224',
+                pretrained=pretrain,
+                num_classes=0 # remove classifier head
+            )
+            
+            # New classification head
+            self.fc = nn.Sequential(
+                nn.Linear(192, 2560),  # 192 is ViT-Tiny feature dim
+                nn.ReLU(),
+                nn.Linear(2560, 512),
+                nn.ReLU(),
+                nn.Linear(512, output_dim)
+            )
+
+        def forward(self, x):
+            features = self.backbone(x)
+            output = self.fc(features)
+            return output
+
     def plot_loss_acc(self, train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, save_path, condition):
         epochs = range(1, len(train_loss_list) + 1)
         fig, ax1 = plt.subplots(figsize=(8, 6))
@@ -855,7 +880,7 @@ class Worker():
         iter_train_loss_list = []
         iter_valid_loss_list = []
 
-        for epoch in range(2, n_epochs+1):
+        for epoch in range(1, n_epochs+1):
             # ---------- Training ----------
             # Make sure the model is in train mode before training.
             model.train()
@@ -1021,8 +1046,8 @@ class Worker():
             save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
             data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.data_trial}"
         else:
-            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
-            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.data_trial}"
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.data_trial}"
 
         condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
         print(f"WSI {_wsi} | {condition}")
@@ -1046,6 +1071,8 @@ class Worker():
 
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
+        elif self.backbone == "ViT_tiny":
+            model = self.ViTWithLinearTiny(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
@@ -1091,6 +1118,8 @@ class Worker():
 
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
+        elif self.backbone == "ViT_tiny":
+            model = self.ViTWithLinearTiny(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
@@ -1126,7 +1155,12 @@ class Worker():
         criterion = nn.BCEWithLogitsLoss()
         
         for c in self.classes:
-            model = self.EfficientNetWithLinear(output_dim=1)
+            if self.backbone == "ViT":
+                model = self.ViTWithLinear(output_dim=1)
+            elif self.backbone == "ViT_tiny":
+                model = self.ViTWithLinearTiny(output_dim=1)
+            else:
+                model = self.EfficientNetWithLinear(output_dim=1)
             model.to(device)
             modelName = f"{condition}_{c}_Model.ckpt"
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
@@ -1169,6 +1203,8 @@ class Worker():
             # Model setting and transfer learning or not
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
+            elif self.backbone == "ViT_tiny":
+                model = self.ViTWithLinearTiny(output_dim=1)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
@@ -1277,6 +1313,8 @@ class Worker():
             # Model setting and transfer learning or not
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
+            elif self.backbone == "ViT_tiny":
+                model = self.ViTWithLinearTiny(output_dim=1)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
@@ -1462,6 +1500,8 @@ class Worker():
 
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
+            elif self.backbone == "ViT_tiny":
+                model = self.ViTWithLinearTiny(output_dim=1)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1487,6 +1527,8 @@ class Worker():
 
                 if self.backbone == "ViT":
                     model = self.ViTWithLinear(output_dim=self.class_num)
+                elif self.backbone == "ViT_tiny":
+                    model = self.ViTWithLinearTiny(output_dim=1)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1505,6 +1547,8 @@ class Worker():
 
                 if self.backbone == "ViT":
                     model = self.ViTWithLinear(output_dim=self.class_num)
+                elif self.backbone == "ViT_tiny":
+                    model = self.ViTWithLinearTiny(output_dim=1)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1533,6 +1577,8 @@ class Worker():
 
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
+        elif self.backbone == "ViT_tiny":
+            model = self.ViTWithLinearTiny(output_dim=1)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1570,17 +1616,20 @@ class Worker():
                 if model_wsi == 'one':
                     model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
                 else:
-                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
+                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC_epoch2.ckpt"
 
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
-            save_path = f"{save_dir}/{_wsi}" 
-
-            modelName = f"{condition}_Model.ckpt"
-            model_path = f"{save_dir}/Model/{modelName}"
+            if model_wsi == 'one':
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+                model_path = f"{save_path}/Model/{_wsi}_{condition}_Model.ckpt"
+            else:
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
+                model_path = f"{save_dir}/Model/{condition}_Model.ckpt"
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
+        elif self.backbone == "ViT_tiny":
+            model = self.ViTWithLinearTiny(output_dim=1)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1730,6 +1779,8 @@ class Worker():
             model_path = f"{save_dir}/Model/{modelName}"
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
+        elif self.backbone == "ViT_tiny":
+            model = self.ViTWithLinearTiny(output_dim=1)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1828,7 +1879,7 @@ class Worker():
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             if self.num_wsi == 1:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
             else:
                 save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
         
@@ -1839,8 +1890,6 @@ class Worker():
         else:
             _condition = f'{__wsi}_{condition}'
         df = pd.read_csv(f"{save_path}/Metric/{_condition}_labels_predictions.csv")
-
-        shift_map = self.file_paths["old_HCC_shift_map"]
         
         all_patches = df['file_name'].to_list()
 
@@ -1862,6 +1911,7 @@ class Worker():
             
             gt_label = self.classes.index(df['true_label'][idx])
             if self.test_state == "old":
+                shift_map = self.file_paths["old_HCC_shift_map"]
                 dx, dy = shift_map[gt_label]
                 x += dx
                 y += dy
