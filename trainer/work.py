@@ -863,7 +863,7 @@ class Worker():
         plt.savefig(f"{save_path}/{condition}_loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
         plt.close()
     
-    def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class):
+    def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class=None):
         n_epochs = self.file_paths['max_epoch']
         min_epoch = self.file_paths['min_epoch']
         max_notImprove = self.file_paths['max_notImprove']
@@ -907,7 +907,7 @@ class Worker():
                     labels = (labels == target_class).to(device).unsqueeze(1).float()
                     logits = model(imgs.to(device))
                     loss = criterion(logits, labels)
-                    preds = (torch.sigmoid(logits) > 0.5).float()
+                    preds = (torch.sigmoid(logits) > 0.5).int()
                     # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
                     correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                     acc = correct_per_sample.float().mean()
@@ -970,7 +970,7 @@ class Worker():
                         logits = model(imgs.to(device))
                         # preds = Sigmoid(logits)
                         loss = criterion(logits, labels)
-                        preds = (logits > 0.5).float()
+                        preds = (logits > 0.5).int()
                         # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
                         correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                         val_acc = correct_per_sample.float().mean()
@@ -1085,7 +1085,7 @@ class Worker():
         
         criterion = nn.BCEWithLogitsLoss()
 
-        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
+        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
 
     def train(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -1130,7 +1130,7 @@ class Worker():
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
-        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
+        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
 
     def train_multi_model(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -1147,7 +1147,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", 0)
+        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
         
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
         val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
@@ -1165,7 +1165,7 @@ class Worker():
             modelName = f"{condition}_{c}_Model.ckpt"
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
-            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
 
     def train_generation_one_WSI(self, wsi, mode="ideal", labeled = True):
         if self.test_state == "old":
@@ -1222,7 +1222,7 @@ class Worker():
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
             print(f"Generation {gen}")
-            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
 
     def prepare_pl_dataset_one_WSI(self, wsi, _wsi, gen, save_path, mode, labeled, condition, state, wsi_type):
         if labeled:
@@ -1333,7 +1333,7 @@ class Worker():
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
             print(f"Generation {gen}")
-            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=None)
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
 
     def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
         test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
