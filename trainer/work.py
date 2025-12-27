@@ -20,7 +20,7 @@ from skimage.measure import find_contours
 
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# from dataset import find_contours
+from dataset.combine_csv import merge_labels, merge_TI
 
 import torch
 import torch.nn as nn
@@ -50,6 +50,9 @@ class Worker():
         class_list = config["class_list"]
         self.classes = [class_list[i] for i in self.file_paths['classes']]
         self.class_num = len(self.classes)
+        self.num_trial = self.file_paths['num_trial'] 
+        
+        # Model parameters
         self.backbone = self.file_paths['backbone']
         self.pretrain = self.file_paths['pretrain']
         self.batch_size = self.file_paths['batch_size']
@@ -57,17 +60,22 @@ class Worker():
         self.model_save_freq = self.file_paths['model_save_freq']
         self.valid_percentage = self.file_paths['valid_percentage']
 
+        # Data parameters
         self.data_num = self.file_paths['data_num']
-        self.num_trial = self.file_paths['num_trial']  
         self.data_trial = self.file_paths['data_trial'] 
         self.num_wsi = self.file_paths['num_wsi']
-        self.test_model = self.file_paths['test_model']
+        self.load_dataset = self.file_paths['load_dataset']
         self.replay_data_num = self.file_paths['replay_data_num']
 
+        # Test parameters
         self.test_state = self.file_paths['test_state']
         self.test_type = self.file_paths['test_type']
+
+        self.test_model = self.file_paths['test_model']
         self.test_model_trial = self.file_paths['test_model_trial']
         self.test_model_wsis = self.file_paths['test_model_wsis']
+        self.test_model_state = self.file_paths['test_model_state']
+        self.test_model_type = self.file_paths['test_model_type']
 
         if self.gen_type:
             self.save_dir = self.file_paths[f'{self.wsi_type}_generation_save_path']
@@ -78,6 +86,7 @@ class Worker():
             os.makedirs(self.save_dir, exist_ok=True)
             os.makedirs(self.save_path, exist_ok=True)
 
+        # wsi lists
         self.hcc_old_wsis = self.file_paths['HCC_old_wsis']
         self.hcc_wsis = self.file_paths['HCC_wsis']
         self.cc_wsis = self.file_paths['CC_wsis']
@@ -86,12 +95,14 @@ class Worker():
         self.replay_hcc_wsis = self.file_paths['replay_HCC_wsis']
         self.replay_cc_wsis = self.file_paths['replay_CC_wsis']
 
+        # data paths
         self.hcc_data_dir = self.file_paths['HCC_new_patches_save_path']
         self.hcc_old_data_dir = self.file_paths['HCC_old_patches_save_path']
         self.cc_data_dir = self.file_paths['CC_patches_save_path']
         self.hcc_csv_dir = self.file_paths['HCC_csv_dir']
         self.cc_csv_dir = self.file_paths['CC_csv_dir']
 
+        # transforms
         self.train_tfm = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.RandomRotation(degrees=(0,360), expand=False),
@@ -1058,7 +1069,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        if self.file_paths['load_dataset']:
+        if self.load_dataset:
             data_condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_2_class_trial_{self.data_trial}"
             train_dataset, valid_dataset, _ = self.load_datasets(f"{data_save_path}/Data", data_condition, "train", wsi=wsi)
         else:
@@ -1076,7 +1087,7 @@ class Worker():
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
-            pretrain_model_path = self.file_paths['40WTC_model_path']
+            pretrain_model_path = self.file_paths[f'{self.test_model}_model_path']
             model.load_state_dict(torch.load(pretrain_model_path, weights_only=True))
 
         optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
@@ -1204,12 +1215,12 @@ class Worker():
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
-                model = self.ViTWithLinearTiny(output_dim=1)
+                model = self.ViTWithLinearTiny(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
                 if self.pretrain:
-                    model_path = self.file_paths[f'{self.num_wsi}WTC_model_path']
+                    model_path = self.file_paths[f'{self.test_model}_model_path']
                     model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
                 model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_1WTC.ckpt"
@@ -1253,7 +1264,7 @@ class Worker():
 
             for wsi in self.hcc_old_wsis:
                 _wsi = wsi
-                if self.file_paths['load_dataset']:
+                if self.load_dataset:
                     train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='old', wsi_type='HCC')
                 else:
                     train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi ,_wsi, gen, save_path, mode, labeled, condition, 'old', 'HCC')
@@ -1261,7 +1272,7 @@ class Worker():
                 valid_datasets.append(valid_dataset)
             for wsi in self.hcc_wsis:
                 _wsi = wsi + 91
-                if self.file_paths['load_dataset']:
+                if self.load_dataset:
                     train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='HCC')
                 else:
                     train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi, _wsi, gen, save_path, mode, labeled, condition, 'new', 'HCC')
@@ -1269,7 +1280,7 @@ class Worker():
                 valid_datasets.append(valid_dataset)
             for wsi in self.cc_wsis:
                 _wsi = f"1{wsi:04d}"
-                if self.file_paths['load_dataset']:
+                if self.load_dataset:
                     train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='CC')
                 else:
                     train_dataset, valid_dataset = self.prepare_pl_dataset_one_WSI(wsi, _wsi, gen, save_path, mode, labeled, condition, 'new', 'CC')
@@ -1279,7 +1290,7 @@ class Worker():
             if replay:
                 for wsi in self.replay_hcc_old_wsis:
                     _wsi = wsi
-                    if self.file_paths['load_dataset']:
+                    if self.load_dataset:
                         train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='old', wsi_type='HCC')
                     else:
                         train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state='old', wsi_type='HCC', replay=True)
@@ -1287,7 +1298,7 @@ class Worker():
                     valid_datasets.append(valid_dataset)
                 for wsi in self.replay_hcc_wsis:
                     _wsi = wsi + 91
-                    if self.file_paths['load_dataset']:
+                    if self.load_dataset:
                         train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='HCC')
                     else:
                         train_dataset, valid_dataset, _  = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state='new', wsi_type='HCC', replay=True)
@@ -1295,7 +1306,7 @@ class Worker():
                     valid_datasets.append(valid_dataset)
                 for wsi in self.replay_cc_wsis:
                     _wsi = f"1{wsi:04d}"
-                    if self.file_paths['load_dataset']:
+                    if self.load_dataset:
                         train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state='new', wsi_type='CC')
                     else:
                         train_dataset, valid_dataset, _  = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state='new', wsi_type='CC', replay=True)
@@ -1314,13 +1325,12 @@ class Worker():
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
-                model = self.ViTWithLinearTiny(output_dim=1)
+                model = self.ViTWithLinearTiny(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
                 if self.pretrain:
-                    # model_path = self.file_paths[f'{self.test_model}_model_path']
-                    model_path = f"{save_path}/Model/Gen1_ND_zscore_{mode}_patches_by_Gen0_{self.num_wsi}WTC.ckpt"
+                    model_path = self.file_paths[f'{self.test_model}_model_path']
                     model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
                 model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_{self.num_wsi}WTC.ckpt"
@@ -1335,7 +1345,10 @@ class Worker():
             print(f"Generation {gen}")
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
 
-    def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc = True):
+    def model_test(self, test_dataset, model, save_path, condition, count_acc=True, classes=None, target_class=None):
+        if classes is None:
+            classes = self.classes
+        
         test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
         model.eval()
@@ -1359,8 +1372,11 @@ class Worker():
 
         # Build Predictions dict
         Predictions = {"file_name": all_fnames}
-        for idx, class_name in enumerate(self.classes):
-            Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
+        if target_class is None:
+            for idx, class_name in enumerate(classes):
+                Predictions[f"{class_name}_pred"] = all_preds[:, idx].tolist()
+        else:
+            Predictions[f"{target_class}_pred"] = all_preds[:, 0].tolist()
         
         pred_df = pd.DataFrame(Predictions)
 
@@ -1368,107 +1384,173 @@ class Worker():
             pred_df.to_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv", index=False)
         else:
             pred_df.to_csv(f"{save_path}/TI/{condition}_all_patches_filter_v2_TI.csv", index=False)
-            return
 
-        # pred_df = pd.read_csv(f"{save_path}/Metric/{condition}_pred_score.csv")
-        # pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
-
+    def evaluation(self, data_info_df, pred_df, save_path, condition, classes=None, target_class=None):
+        if classes is None:
+            classes = self.classes
         results_df = {"file_name":[]}
-        all_labels, all_preds_labels = [], []
+        all_labels, all_preds_labels, all_real_labels = [], [], []
         match_df  = data_info_df[data_info_df['file_name'].isin(pred_df['file_name'])]
 
         filename_inRegion = match_df['file_name'].to_list()
         label_inRegion = match_df['label'].to_list()
 
         for idx, filename in enumerate(tqdm(filename_inRegion)):
-            label = self.classes.index(label_inRegion[idx])
             results_df["file_name"].append(filename)
             row = pred_df[pred_df['file_name'] == filename]
-            preds = [row[f'{cl}_pred'].values[0] for cl in self.classes]
 
-            over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
-
-            if len(over_threshold) == 1:
-                pred = over_threshold[0]
+            if target_class is None:
+                if label_inRegion[idx] in classes:
+                    label = classes.index(label_inRegion[idx])
+                else:
+                    label = len(classes) # unknown class
+                preds = [row[f'{cl}_pred'].values[0] for cl in classes]
+                over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
+                pred = over_threshold[0] if len(over_threshold) == 1 else -1
             else:
-                pred = -1
+                label = int(label_inRegion[idx] == target_class)
+                score = row[f'{target_class}_pred'].values[0]
+                pred = 1 if score > 0.5 else 0
+                real_label = classes.index(label_inRegion[idx])
+                all_real_labels.append(real_label)
 
             all_labels.append(label)
             all_preds_labels.append(pred)
 
-        all_classes = ['unknown'] + self.classes
-        text_labels = [self.classes[label] for label in all_labels]
-        text_preds = [all_classes[pred+1] for pred in all_preds_labels]
+        if target_class is None:
+            all_classes = ['unknown'] + classes
+            text_labels = [self.classes[label] for label in all_labels]
+            text_preds = [all_classes[pred+1] for pred in all_preds_labels]
+        else:
+            all_classes = ['others', target_class]
+            text_labels = [classes[label] for label in all_real_labels]
+            text_preds = [target_class if pred ==1 else 'others' for pred in all_preds_labels]
 
         results_df["true_label"] = text_labels
         results_df["pred_label"] = text_preds
 
         # Save to CSV
         pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv", index=False)
+        return all_labels, all_preds_labels
 
+    def compute_metrics(self, all_labels, all_preds_labels, pred_df, save_path, condition, classes=None, target_class=None, compute_roc=True):
+        if classes is None:
+            classes = self.classes
+        
         acc = accuracy_score(all_labels, all_preds_labels)
         print("Accuracy: {:.4f}".format(acc))
 
-        y_true_mapped = [l + 1 for l in all_labels]
-        y_score_mapped = [p + 1 for p in all_preds_labels]
-
-        cm = confusion_matrix(y_true_mapped, y_score_mapped, labels=range(len(all_classes)))
-        title = f"Confusion Matrix of {condition}"
-        self.plot_confusion_matrix(cm, save_path, condition, all_classes, title)
-
-        y_true = np.array(all_labels)
-        y_score = pred_df[[f"{cl}_pred" for cl in self.classes]].values
-
-        per_class_auc = {}
-        for i, class_name in enumerate(self.classes):
-            # One-vs-Rest labels
-            y_true_binary = (y_true == i).astype(int)
-            if len(np.unique(y_true_binary)) > 1:
-                auc_i = roc_auc_score(y_true_binary, y_score[:, i])
-            else:
-                auc_i = float('nan')  # AUC is not defined in this case
-            per_class_auc[class_name] = auc_i
-
-        # Print results
-        for class_name, auc_val in per_class_auc.items():
-            print(f"AUC for {class_name}: {auc_val}")
-
-        self.plot_roc(y_true, y_score, save_path, condition)
-
         Test_Acc = {"Condition": [condition], "Accuracy": [acc]}
-        for class_name, auc_val in per_class_auc.items():
-            Test_Acc[f"{class_name}_AUC"] = [auc_val]
+        if target_class is None:
+            all_classes = ['unknown'] + classes
+            y_true_mapped = [l + 1 for l in all_labels]
+            y_score_mapped = [p + 1 for p in all_preds_labels]
 
-        for i, class_name in enumerate(self.classes):
-            cm_idx = i+1
-            TP = cm[cm_idx, cm_idx]  # True Positives
-            FN = cm[cm_idx, :].sum() - TP  # False Negatives
-            FP = cm[:, cm_idx].sum() - TP  # False Positives
-            TN = cm.sum() - (TP + FP + FN)  # True Negatives
+            cm = confusion_matrix(y_true_mapped, y_score_mapped, labels=range(len(all_classes)))
+            title = f"Confusion Matrix of {condition}"
+            self.plot_confusion_matrix(cm, save_path, condition, all_classes, title)
+
+            for i, class_name in enumerate(classes):
+                cm_idx = i+1
+                TP = cm[cm_idx, cm_idx]  # True Positives
+                FN = cm[cm_idx, :].sum() - TP  # False Negatives
+                FP = cm[:, cm_idx].sum() - TP  # False Positives
+                TN = cm.sum() - (TP + FP + FN)  # True Negatives
+                
+                Test_Acc[f"{class_name}_TP"] = [TP]
+                Test_Acc[f"{class_name}_FN"] = [FN]
+                Test_Acc[f"{class_name}_TN"] = [TN]
+                Test_Acc[f"{class_name}_FP"] = [FP]
+
+            if compute_roc:
+                y_true = np.array(all_labels)
+                y_score = pred_df[[f"{cl}_pred" for cl in classes]].values
+
+                per_class_auc = {}
+                for i, class_name in enumerate(classes):
+                    # One-vs-Rest labels
+                    y_true_binary = (y_true == i).astype(int)
+                    if len(np.unique(y_true_binary)) > 1:
+                        auc_i = roc_auc_score(y_true_binary, y_score[:, i])
+                    else:
+                        auc_i = float('nan')  # AUC is not defined in this case
+                    per_class_auc[class_name] = auc_i
+
+                # Print results
+                for class_name, auc_val in per_class_auc.items():
+                    print(f"AUC for {class_name}: {auc_val}")
+
+                self.plot_roc(y_true, y_score, save_path, condition)
+
+                for class_name, auc_val in per_class_auc.items():
+                    Test_Acc[f"{class_name}_AUC"] = [auc_val]
             
-            Test_Acc[f"{class_name}_TP"] = [TP]
-            Test_Acc[f"{class_name}_FN"] = [FN]
-            Test_Acc[f"{class_name}_TN"] = [TN]
-            Test_Acc[f"{class_name}_FP"] = [FP]
+        else:
+            all_classes = ['others', target_class]
+            y_true = np.array(all_labels)
+            y_pred = np.array(all_preds_labels)
+
+            cm = confusion_matrix(y_true, y_pred, labels=range(len(all_classes)))
+            title = f"Confusion Matrix of {condition} ({target_class} vs others)"
+            self.plot_confusion_matrix(cm, save_path, condition, all_classes, title)
+
+            TN, FP, FN, TP = cm.ravel()
+
+            Test_Acc[f"{target_class}_TP"] = [TP]
+            Test_Acc[f"{target_class}_FN"] = [FN]
+            Test_Acc[f"{target_class}_TN"] = [TN]
+            Test_Acc[f"{target_class}_FP"] = [FP]
+
+            if compute_roc:
+                y_score = pred_df[f"{target_class}_pred"].values
+                if len(np.unique(y_true)) > 1:
+                    auc = roc_auc_score(y_true, y_score)
+                else:
+                    auc = float('nan')
+                self.plot_roc(y_true, y_score, save_path, condition, target_class)
+
+                Test_Acc[f"{target_class}_AUC"] = [auc]
 
         # Save to CSV
         pd.DataFrame(Test_Acc).to_csv(f"{save_path}/Metric/{condition}_test_result.csv", index=False)
+
+    def _test(self, test_dataset, data_info_df, model, save_path, condition, count_acc=True, classes=None, target_class=None):
+        if classes is None:
+            classes = self.classes
+
+        self.model_test(test_dataset, model, save_path, condition, count_acc, classes, target_class)
+        if not count_acc:
+            return
+
+        pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
+        all_labels, all_preds_labels = self.evaluation(data_info_df, pred_df, save_path, condition, classes, target_class)
         
-    def test_one_WSI(self, wsi):
-        if self.state == "old":
-            _wsi = wsi
-        elif self.wsi_type == "HCC":
-            _wsi = wsi + 91
-        elif self.wsi_type == "CC":
-            _wsi = f"1{wsi:04d}"
+        self.compute_metrics(all_labels, all_preds_labels, pred_df, save_path, condition, classes, target_class)
         
-        condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-        if self.wsi_type == "HCC":
-            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
-            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.data_trial}"
+    def test_small_set(self, wsi=None, model_wsi='one', test_state=None, test_type=None):
+        if test_state == None:
+            test_state = self.test_state
+        if test_type == None:
+            test_type = self.test_type
+        
+        if wsi is None:
+            condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            save_path = f"{self.save_path}/trial_{self.num_trial}"
         else:
-            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
-            data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.data_trial}"
+            if test_state == "old":
+                _wsi = wsi
+            elif test_type == "HCC":
+                _wsi = wsi + 91
+            elif test_type == "CC":
+                _wsi = f"1{wsi:04d}"
+            
+            condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+            if test_type == "HCC":
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+                data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.data_trial}"
+            else:
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.num_trial}"
+                data_save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{wsi}/trial_{self.data_trial}"
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1476,32 +1558,35 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
         
-        if self.file_paths['load_dataset']:
-            data_condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_2_class_trial_{self.data_trial}"
-            data_info_df = pd.read_csv(f"{data_save_path}/Data/{data_condition}_test.csv")
-            _, _, test_dataset = self.load_datasets(f"{data_save_path}/Data", data_condition, "test", wsi=wsi)
+        if self.load_dataset:
+            if wsi is None:
+                data_condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.num_classes}_class_trial_{self.data_trial}"
+                data_info_df = pd.read_csv(f"{data_save_path}/Data/{data_condition}_test.csv")
+                _, _, test_dataset = self.load_datasets(f"{data_save_path}/Data", data_condition, "test")
+            else:
+                data_condition = f"{_wsi}_{self.num_wsi}WTC_LP{self.data_num}_2_class_trial_{self.data_trial}"
+                data_info_df = pd.read_csv(f"{data_save_path}/Data/{data_condition}_test.csv")
+                _, _, test_dataset = self.load_datasets(f"{data_save_path}/Data", data_condition, "test", wsi=wsi)
         else:
-            if self.state == "old":
-                data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-                test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
-            elif self.wsi_type == "HCC":
-                data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-                test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
-            elif self.wsi_type == "CC":
-                data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-                test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+            if wsi is None:
+                _, _, test_dataset = self.prepare_dataset(f"{save_path}/Data", condition, 0, "test")
+            else:
+                _, _, test_dataset = self.prepare_dataset(f"{save_path}/Data", condition, 0, "test", wsi=wsi)
+            data_info_df = pd.read_csv(f"{save_path}/Data/{condition}_test.csv")
 
         print(f"testing data number: {len(test_dataset)}")
 
-        if self.test_model == "self":        
+        if self.test_model == "self":
             # Prepare Model
-            modelName = f"{condition}_Model.ckpt"
-            model_path = f"{save_path}/Model/{modelName}"
+            if model_wsi == 'one':
+                model_path = f"{save_path}/Model/{_wsi}_{condition}_Model.ckpt"
+            else:
+                model_path = f"{save_dir}/Model/{condition}_Model.ckpt"
 
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
-                model = self.ViTWithLinearTiny(output_dim=1)
+                model = self.ViTWithLinearTiny(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1512,13 +1597,13 @@ class Worker():
         elif self.test_model == "multi_wsi":
             for model_wsi in self.test_model_wsis:
                 # Prepare Model
-                if self.state == "old":
+                if self.test_model_state == "old":
                     _model_wsi = model_wsi
                     model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.test_model_trial}"
-                elif self.wsi_type == "HCC":
+                elif self.test_model_type == "HCC":
                     _model_wsi = model_wsi + 91
                     model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{self.test_model_trial}"
-                elif self.wsi_type == "CC":
+                elif self.test_model_type == "CC":
                     _model_wsi = f"1{model_wsi:04d}"
                     model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.test_model_trial}"
 
@@ -1528,7 +1613,7 @@ class Worker():
                 if self.backbone == "ViT":
                     model = self.ViTWithLinear(output_dim=self.class_num)
                 elif self.backbone == "ViT_tiny":
-                    model = self.ViTWithLinearTiny(output_dim=1)
+                    model = self.ViTWithLinearTiny(output_dim=self.class_num)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1540,15 +1625,17 @@ class Worker():
 
         elif self.test_model == "multi_epoch":
             for ep in range(1, 21):
-                modelName = f"{condition}_Model_epoch{ep}.ckpt"
-                model_path = f"{save_path}/Model/{modelName}"
+                if model_wsi == 'one':
+                    model_path = f"{save_path}/Model/{_wsi}_{condition}_Model_epoch{ep}.ckpt"
+                else:
+                    model_path = f"{save_dir}/Model/{condition}_Model_epoch{ep}.ckpt"
                 if not os.path.exists(model_path):
                     continue
 
                 if self.backbone == "ViT":
                     model = self.ViTWithLinear(output_dim=self.class_num)
                 elif self.backbone == "ViT_tiny":
-                    model = self.ViTWithLinearTiny(output_dim=1)
+                    model = self.ViTWithLinearTiny(output_dim=self.class_num)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1557,6 +1644,28 @@ class Worker():
 
                 _condition = f'{condition}_for_epoch_{ep}'
                 self._test(test_dataset, data_info_df, model, save_path, _condition)
+
+        elif self.test_model == "multi_class":
+            for c in self.classes:
+                if model_wsi == 'one':
+                    model_path = f"{save_path}/Model/{_wsi}_{condition}_{c}_Model.ckpt"
+                else:
+                    model_path = f"{save_dir}/Model/{condition}_{c}_Model.ckpt"
+                if not os.path.isfile(model_path):
+                    continue
+
+                if self.backbone == "ViT":
+                    model = self.ViTWithLinear(output_dim=1)
+                elif self.backbone == "ViT_tiny":
+                    model = self.ViTWithLinearTiny(output_dim=1)
+                else:
+                    model = self.EfficientNetWithLinear(output_dim=1)
+                
+                model.load_state_dict(torch.load(model_path, weights_only=True))
+                model.to(device)
+
+                _condition = f'{condition}_for_class_{c}'
+                self._test(test_dataset, data_info_df, model, save_path, _condition, model_type=c)
     
     def test(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -1578,7 +1687,7 @@ class Worker():
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
-            model = self.ViTWithLinearTiny(output_dim=1)
+            model = self.ViTWithLinearTiny(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1601,6 +1710,17 @@ class Worker():
             _wsi = wsi + 91
         elif test_type == "CC":
             _wsi = f"1{wsi:04d}"
+
+        # Dataset, Evaluation, Inference
+        if test_state == "old":
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
+        elif test_type == "HCC":
+            data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+        elif test_type == "CC":
+            data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
+            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
         
         if self.gen_type:
             if save_path == None:
@@ -1616,22 +1736,161 @@ class Worker():
                 if model_wsi == 'one':
                     model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
                 else:
-                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC_epoch2.ckpt"
+                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
+            
+            os.makedirs(f"{save_path}/Model", exist_ok=True)
+            os.makedirs(f"{save_path}/Metric", exist_ok=True)
+            os.makedirs(f"{save_path}/Loss", exist_ok=True)
+            os.makedirs(f"{save_path}/TI", exist_ok=True)
+            os.makedirs(f"{save_path}/Data", exist_ok=True)
+            
+            # Prepare Model
+            model.load_state_dict(torch.load(model_path, weights_only = True))
+            model.to(device)
+            
+            _condition = f'{_wsi}_{condition}'
+
+            print(f"WSI {wsi} | {_condition}")
+            print(self.classes)
+
+            self._test(test_dataset, data_info_df, model, save_path, _condition)
 
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
             if model_wsi == 'one':
                 save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
-                model_path = f"{save_path}/Model/{_wsi}_{condition}_Model.ckpt"
             else:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
-                model_path = f"{save_dir}/Model/{condition}_Model.ckpt"
-        if self.backbone == "ViT":
-            model = self.ViTWithLinear(output_dim=self.class_num)
-        elif self.backbone == "ViT_tiny":
-            model = self.ViTWithLinearTiny(output_dim=1)
+                save_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
+                save_path = f"{save_dir}/{_wsi}"
+
+            os.makedirs(f"{save_path}/Model", exist_ok=True)
+            os.makedirs(f"{save_path}/Metric", exist_ok=True)
+            os.makedirs(f"{save_path}/Loss", exist_ok=True)
+            os.makedirs(f"{save_path}/TI", exist_ok=True)
+            os.makedirs(f"{save_path}/Data", exist_ok=True)
+
+            if self.test_model == "self":
+                # Prepare Model
+                if model_wsi == 'one':
+                    model_path = f"{save_path}/Model/{_wsi}_{condition}_Model.ckpt"
+                else:
+                    model_path = f"{save_dir}/Model/{condition}_Model.ckpt"
+
+                if self.backbone == "ViT":
+                    model = self.ViTWithLinear(output_dim=self.class_num)
+                elif self.backbone == "ViT_tiny":
+                    model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                else:
+                    model = self.EfficientNetWithLinear(output_dim=self.class_num)
+                model.load_state_dict(torch.load(model_path, weights_only=True))
+                model.to(device)
+
+                _condition = f'{_wsi}_{condition}'
+
+                print(f"WSI {wsi} | {_condition}")
+
+                self._test(test_dataset, data_info_df, model, save_path, _condition)
+            
+            elif self.test_model == "multi_wsi":
+                for model_wsi in self.test_model_wsis:
+                    # Prepare Model
+                    if self.test_model_state == "old":
+                        _model_wsi = model_wsi
+                        model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.test_model_trial}"
+                    elif self.test_model_type == "HCC":
+                        _model_wsi = model_wsi + 91
+                        model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_model_wsi}/trial_{self.test_model_trial}"
+                    elif self.test_model_type == "CC":
+                        _model_wsi = f"1{model_wsi:04d}"
+                        model_dir = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{model_wsi}/trial_{self.test_model_trial}"
+
+                    modelName = f"{_model_wsi}_{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.test_model_trial}_Model.ckpt"
+                    model_path = f"{model_dir}/Model/{modelName}"
+
+                    if self.backbone == "ViT":
+                        model = self.ViTWithLinear(output_dim=self.class_num)
+                    elif self.backbone == "ViT_tiny":
+                        model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                    else:
+                        model = self.EfficientNetWithLinear(output_dim=self.class_num)
+
+                    model.load_state_dict(torch.load(model_path, weights_only=True))
+                    model.to(device)
+
+                    _condition = f'{_wsi}_{condition}_on_model_{model_wsi}'
+                    
+                    print(f"WSI {wsi} | {_condition}")
+
+                    self._test(test_dataset, data_info_df, model, save_path, _condition)
+
+            elif self.test_model == "multi_epoch":
+                for ep in range(1, 21):
+                    if model_wsi == 'one':
+                        model_path = f"{save_path}/Model/{_wsi}_{condition}_Model_epoch{ep}.ckpt"
+                    else:
+                        model_path = f"{save_dir}/Model/{condition}_Model_epoch{ep}.ckpt"
+                    if not os.path.exists(model_path):
+                        continue
+
+                    if self.backbone == "ViT":
+                        model = self.ViTWithLinear(output_dim=self.class_num)
+                    elif self.backbone == "ViT_tiny":
+                        model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                    else:
+                        model = self.EfficientNetWithLinear(output_dim=self.class_num)
+
+                    model.load_state_dict(torch.load(model_path, weights_only=True))
+                    model.to(device)
+
+                    _condition = f'{_wsi}_{condition}_for_epoch_{ep}'
+
+                    print(f"WSI {wsi} | {_condition}")
+
+                    self._test(test_dataset, data_info_df, model, save_path, _condition)
+
+            elif self.test_model == "multi_class":
+                for c in self.classes:
+                    if model_wsi == 'one':
+                        model_path = f"{save_path}/Model/{_wsi}_{condition}_{c}_Model.ckpt"
+                    else:
+                        model_path = f"{save_dir}/Model/{condition}_{c}_Model.ckpt"
+                    if not os.path.isfile(model_path):
+                        continue
+
+                    if self.backbone == "ViT":
+                        model = self.ViTWithLinear(output_dim=1)
+                    elif self.backbone == "ViT_tiny":
+                        model = self.ViTWithLinearTiny(output_dim=1)
+                    else:
+                        model = self.EfficientNetWithLinear(output_dim=1)
+                    
+                    model.load_state_dict(torch.load(model_path, weights_only=True))
+                    model.to(device)
+
+                    _condition = f'{_wsi}_{condition}_for_class_{c}'
+
+                    print(f"WSI {wsi} | {_condition}")
+
+                    self._test(test_dataset, data_info_df, model, save_path, _condition, model_type=c)
+
+    def test_TATI_two_stage(self, wsi, gen, save_path = None, mode = 'ideal', model_wsi = 'one', test_state=None, test_type=None):
+        if test_state == None:
+            test_state = self.test_state
+        if test_type == None:
+            test_type = self.test_type
+        
+        if test_state == "old":
+            _wsi = wsi
+        elif test_type == "HCC":
+            _wsi = wsi + 91
+        elif test_type == "CC":
+            _wsi = f"1{wsi:04d}"
+        
+        condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+        if model_wsi == 'one':
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
         else:
-            model = self.EfficientNetWithLinear(output_dim=self.class_num)
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}"
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1639,27 +1898,77 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        # Prepare Model
-        model.load_state_dict(torch.load(model_path, weights_only = True))
-        model.to(device)
-
         # Dataset, Evaluation, Inference
         if test_state == "old":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
+            test_dataset_1 = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
         elif test_type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset_1 = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
         elif test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset_1 = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+
+        # First Stage
+        model_path = self.file_paths['first_stage_model_path']
+        if self.backbone == "ViT":
+            model_1 = self.ViTWithLinear(output_dim=1)
+        elif self.backbone == "ViT_tiny":
+            model_1 = self.ViTWithLinearTiny(output_dim=1)
+        else:
+            model_1 = self.EfficientNetWithLinear(output_dim=1)
         
-        _condition = f'{_wsi}_{condition}'
+        model_1.load_state_dict(torch.load(model_path, weights_only=True))
+        model_1.to(device)
 
+        _condition = f'{_wsi}_{condition}_first_stage'
         print(f"WSI {wsi} | {_condition}")
-        print(self.classes)
+        self._test(test_dataset_1, data_info_df, model_1, save_path, _condition, target_class=self.file_paths['first_stage_target_class'])
+        
+        # Second Stage
+        pred_df = pd.read_csv(f"{save_path}/Metric/{_condition}_labels_predictions.csv")
 
-        self._test(test_dataset, data_info_df, model, save_path, _condition)
+        others_df = pred_df[pred_df['pred_label'] == 'others'].copy()
+        others_df = others_df[['file_name', 'true_label']]
+        others_df = others_df.rename(columns={"true_label": "label"})
+        others_df = others_df.reset_index(drop=True)
+        
+        classes = self.classes.copy()
+        classes.remove(self.file_paths['first_stage_target_class'])
+
+        if test_state == "old":
+            test_dataset_2 = self.TestDataset(others_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
+        elif test_type == "HCC":
+            test_dataset_2 = self.TestDataset(others_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+        elif test_type == "CC":
+            test_dataset_2 = self.TestDataset(others_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+
+        model_path = self.file_paths['second_stage_model_path']
+        if self.backbone == "ViT":
+            model_2 = self.ViTWithLinear(output_dim=2)
+        elif self.backbone == "ViT_tiny":
+            model_2 = self.ViTWithLinearTiny(output_dim=2)
+        else:
+            model_2 = self.EfficientNetWithLinear(output_dim=2)
+        model_2.load_state_dict(torch.load(model_path, weights_only=True))
+        model_2.to(device)
+
+        _condition = f'{_wsi}_{condition}_second_stage'
+        print(f"WSI {wsi} | {_condition}")
+        self._test(test_dataset_2, others_df, model_2, save_path, _condition, classes=classes)
+
+        _condition = f'{_wsi}_{condition}'
+        
+        df_pred_label = merge_labels(f"{save_path}", _wsi, _condition)
+        df_pred_score = merge_TI(f"{save_path}", _wsi, _condition, self.classes, self.file_paths['first_stage_target_class'])
+
+        all_labels = [self.classes.index(label) for label in df_pred_label['true_label'].to_list()]
+        all_preds_labels = [
+            self.classes.index(pred) if pred in self.classes else -1
+            for pred in df_pred_label['pred_label'].to_list()
+        ]
+        
+        self.compute_metrics(all_labels, all_preds_labels, df_pred_score, save_path, _condition, compute_roc=False)
     
     def test_flip(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one'):
         ### Multi-WTC Evaluation ###
@@ -1780,7 +2089,7 @@ class Worker():
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
-            model = self.ViTWithLinearTiny(output_dim=1)
+            model = self.ViTWithLinearTiny(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1834,19 +2143,27 @@ class Worker():
         plt.savefig(f"{save_path}/Metric/{condition}_confusion_matrix.png")
         plt.close()
 
-    def plot_roc(self, y_true, y_score, save_path, condition):
+    def plot_roc(self, y_true, y_score, save_path, condition, target_class=None):
         plt.figure(figsize=(8, 6))
 
-        for i, class_name in enumerate(self.classes):
-            # One-vs-Rest labels
-            y_true_binary = (y_true == i).astype(int)
-            if len(np.unique(y_true_binary)) > 1:
-                # Compute ROC curve
-                fpr, tpr, _ = roc_curve(y_true_binary, y_score[:, i])
-                # Compute AUC
+        if target_class is not None:
+            if len(np.unique(y_true)) > 1:
+                fpr, tpr, _ = roc_curve(y_true, y_score)
                 roc_auc = auc(fpr, tpr)
-                # Plot
-                plt.plot(fpr, tpr, lw=2, label=f"{class_name} (AUC = {roc_auc:.4f})")
+                plt.plot(fpr, tpr, lw=2, label=f"{target_class} vs others (AUC = {roc_auc:.4f})")
+        else:
+            for i, class_name in enumerate(self.classes):
+                # One-vs-Rest labels
+                y_true_binary = (y_true == i).astype(int)
+                if y_score.shape[1] <= i:
+                    continue
+                if len(np.unique(y_true_binary)) > 1:
+                    # Compute ROC curve
+                    fpr, tpr, _ = roc_curve(y_true_binary, y_score[:, i])
+                    # Compute AUC
+                    roc_auc = auc(fpr, tpr)
+                    # Plot
+                    plt.plot(fpr, tpr, lw=2, label=f"{class_name} (AUC = {roc_auc:.4f})")
 
         # Diagonal line for random guess
         plt.plot([0, 1], [0, 1], "k--", lw=2)
@@ -2200,7 +2517,7 @@ class Worker():
                 condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_dir = os.path.join(self.file_paths[f'{self.wsi_type}_{self.num_wsi}WTC_model_path'], f"LP_{self.data_num}/trial_{self.num_trial}") 
+            save_dir = os.path.join(self.file_paths[f'{self.test_model}_model_path'], f"LP_{self.data_num}/trial_{self.num_trial}") 
             save_path = f"{save_dir}/{_wsi}" 
 
         df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
