@@ -27,6 +27,7 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models import vit_b_16, ViT_B_16_Weights
 from torch_ema import ExponentialMovingAverage as ema
+from torch.amp import autocast, GradScaler
 import timm
 
 import matplotlib.pyplot as plt
@@ -66,6 +67,8 @@ class Worker():
         self.num_wsi = self.file_paths['num_wsi']
         self.load_dataset = self.file_paths['load_dataset']
         self.replay_data_num = self.file_paths['replay_data_num']
+        self.other_validation = self.file_paths['other_validation']
+        self.other_valid_size = self.file_paths['valid_size']
 
         # Test parameters
         self.test_state = self.file_paths['test_state']
@@ -95,6 +98,10 @@ class Worker():
         self.replay_hcc_wsis = self.file_paths['replay_HCC_wsis']
         self.replay_cc_wsis = self.file_paths['replay_CC_wsis']
 
+        self.valid_hcc_old_wsis = self.file_paths['valid_HCC_old_wsis']
+        self.valid_hcc_wsis = self.file_paths['valid_HCC_wsis']
+        self.valid_cc_wsis = self.file_paths['valid_CC_wsis']
+
         # data paths
         self.hcc_data_dir = self.file_paths['HCC_new_patches_save_path']
         self.hcc_old_data_dir = self.file_paths['HCC_old_patches_save_path']
@@ -118,6 +125,40 @@ class Worker():
         ])
     
     class TrainDataset(Dataset):
+        def __init__(self, data_dict, img_dir, classes, transform, state):
+            self.data_dict = data_dict
+            self.img_dir = img_dir
+            self.classes = classes
+            self.transform = transform
+            self.state = state
+
+        def __getitem__(self, id):
+            index = random.randint(0, len(self.data_dict["file_name"]) - 1)
+
+            label_text = self.data_dict["label"][index]
+            label = self.classes.index(label_text)
+            img_name = self.data_dict["file_name"][index]
+
+            if self.state == "old":
+                if label_text == "H":
+                    img_path = os.path.join(self.img_dir, "HCC", img_name)
+                if label_text == "N":
+                    img_path = os.path.join(self.img_dir, "Normal", img_name)
+            elif self.state == "new":
+                img_path = os.path.join(self.img_dir, img_name)
+            
+            image = Image.open(img_path)
+            image = self.transform(image)
+            if self.data_dict["augment"][index]:
+                image = transforms.RandomRotation(degrees=(0, 360))(image)
+
+            return image, label, img_path
+
+        def __len__(self):
+            # return len(self.data_dict["file_name"])
+            return 3200
+
+    class ValidDataset(Dataset):
         def __init__(self, data_dict, img_dir, classes, transform, state):
             self.data_dict = data_dict
             self.img_dir = img_dir
@@ -193,7 +234,12 @@ class Worker():
                     return True
         return False
     
-    def split_datas(self, selected_data, data_num, tp_data=None, fp_data=None):
+    def split_datas(self, selected_data, data_num, tp_data=None, fp_data=None, valid_percentage=None, test_percentage=None):
+        if valid_percentage is None:
+            valid_percentage = self.valid_percentage
+        if test_percentage is None:
+            test_percentage = 0.0
+
         file_names = selected_data['file_name'].to_numpy()
         labels = selected_data['label'].to_numpy()        
         datas = []
@@ -222,7 +268,7 @@ class Worker():
         
         if data_num == "ALL":
             max_len = max(len(names) for names in class_file_names)
-            for num in range(len(self.classes)):
+            for num in range(self.class_num):
                 class_samples = class_file_names[num]
                 if len(class_samples) > 0:
                     # datas.append([(name, False) for name in class_samples])
@@ -243,7 +289,7 @@ class Worker():
                     datas.append([])
         else:
             data_num = int(data_num)
-            for cl in range(len(self.classes)):
+            for cl in range(self.class_num):
                 class_samples = class_file_names[cl]
 
                 if self.gen_type:
@@ -355,18 +401,27 @@ class Worker():
 
         # Prepare train/val dataset
         train, val, test = [], [], []
-        for num in range(len(self.classes)):
+        valid_test_percentage = valid_percentage + test_percentage
+        for num in range(self.class_num):
             if len(datas[num]) > 0:
-                train_, val_ = train_test_split(datas[num], test_size=self.valid_percentage, random_state=0)  # 80:20 split
-                # val_, test_ = train_test_split(temp, test_size=0.5, random_state=0)  # 50:50 split on 20% = 10% each
+                if valid_test_percentage < 1:
+                    train_, temp = train_test_split(datas[num], test_size=valid_test_percentage, random_state=0)
+                else:
+                    train_ = []
+                    temp = datas[num]
+                if test_percentage > 0:
+                    val_, test_ = train_test_split(temp, test_size=test_percentage/valid_test_percentage, random_state=0)
+                else:
+                    val_ = temp
+                    test_ = []
                 
                 train.append(train_)
                 val.append(val_)
-                # test.append(test_)
+                test.append(test_)
             else:
                 train.append([])
                 val.append([])
-                # test.append([])
+                test.append([])
 
         # Flatten and extract file_name, label, and augment flag
         def extract_info(split_list, class_index):
@@ -390,10 +445,10 @@ class Worker():
             val_labels += lb
             val_augments += aug
 
-            # fn, lb, aug = extract_info(test[i], i)
-            # test_file_names += fn
-            # test_labels += lb
-            # test_augments += aug
+            fn, lb, aug = extract_info(test[i], i)
+            test_file_names += fn
+            test_labels += lb
+            test_augments += aug
 
         error_rate = self.file_paths['error_rate']  # Let 10% of data be wrong
 
@@ -417,22 +472,24 @@ class Worker():
             "label": val_labels,
             "augment": val_augments,
         }
-        # Test = {
-        #     "file_name": test_file_names,
-        #     "label": test_labels,
-        #     "augment": test_augments,
-        # }
-        Test = {}
+        Test = {
+            "file_name": test_file_names,
+            "label": test_labels,
+            "augment": test_augments,
+        }
+
         return Train, Val, Test
 
     def prepare_dataset(self, save_path, condition, gen, data_stage, wsi=None, mode=None, state=None, wsi_type=None, replay=False):
         train_data = []
         valid_data = []
         test_data = []
+        other_valid_data = []
 
         train_datasets = []
         valid_datasets = []
         test_datasets = []
+        other_valid_datasets = []
 
         if state == None:
             state = self.state
@@ -455,7 +512,7 @@ class Worker():
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
-                h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
+                h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
 
                 train_datasets.append(h_train_dataset)
@@ -470,7 +527,7 @@ class Worker():
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
-                h_valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
+                h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
 
                 train_datasets.append(h_train_dataset)
@@ -485,7 +542,7 @@ class Worker():
                 selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                 c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
-                c_valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
+                c_valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
                 c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
 
                 train_datasets.append(c_train_dataset)
@@ -512,7 +569,7 @@ class Worker():
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                 test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
             
             elif wsi_type == "HCC":
@@ -526,7 +583,7 @@ class Worker():
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
             
             elif wsi_type == "CC":
@@ -540,7 +597,7 @@ class Worker():
                     selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, data_num)
                 train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
             else:
                 if self.test_state == "old":
@@ -554,7 +611,7 @@ class Worker():
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                    valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
                 elif self.test_type == "HCC":
                     if self.gen_type:
@@ -567,7 +624,7 @@ class Worker():
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                    valid_dataset = self.TrainDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
                 else:
                     if self.gen_type:
@@ -580,20 +637,50 @@ class Worker():
                         selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
                     train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                    valid_dataset = self.TrainDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
 
             train_data.extend(pd.DataFrame(Train).to_dict(orient='records'))
             valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
             test_data.extend(pd.DataFrame(Test).to_dict(orient='records'))
 
+        if self.other_validation and data_stage == "train":
+            for h_wsi in self.valid_hcc_old_wsis:
+                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
+                _, Valid, _ = self.split_datas(selected_data, self.other_valid_size, valid_percentage=1.0)
+                h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
+
+                other_valid_datasets.append(h_valid_dataset)
+                other_valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
+
+            for h_wsi in self.valid_hcc_wsis:
+                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
+                _, Valid, _ = self.split_datas(selected_data, self.other_valid_size, valid_percentage=1.0)
+                h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
+
+                other_valid_datasets.append(h_valid_dataset)
+                other_valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
+
+            for c_wsi in self.valid_cc_wsis:
+                selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
+                _, Valid, _ = self.split_datas(selected_data, self.other_valid_size, valid_percentage=1.0)
+                c_valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
+
+                other_valid_datasets.append(c_valid_dataset)
+                other_valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
+
+            other_valid_dataset = ConcatDataset(other_valid_datasets)
+        else:
+            other_valid_dataset = None
+
         if data_stage == "train":
             pd.DataFrame(train_data).to_csv(f"{save_path}/{condition}_train.csv", index=False)
             pd.DataFrame(valid_data).to_csv(f"{save_path}/{condition}_valid.csv", index=False)
+            pd.DataFrame(other_valid_data).to_csv(f"{save_path}/{condition}_other_valid.csv", index=False)
         elif data_stage == "test":
             pd.DataFrame(test_data).to_csv(f"{save_path}/{condition}_test.csv", index=False)
 
-        return train_dataset, valid_dataset, test_dataset  
+        return train_dataset, valid_dataset, other_valid_dataset, test_dataset
 
     def load_datasets(self, save_path, condition, data_stage, wsi, state=None, wsi_type=None):
         train_csv = f"{save_path}/{condition}_train.csv"
@@ -612,13 +699,13 @@ class Worker():
                 Valid = pd.read_csv(valid_csv).to_dict(orient="list")
                 if state == "old":
                     train_dataset = self.TrainDataset(Train, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
-                    valid_dataset = self.TrainDataset(Valid, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
+                    valid_dataset = self.ValidDataset(Valid, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
                 elif wsi_type == "HCC":
                     train_dataset = self.TrainDataset(Train, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
-                    valid_dataset = self.TrainDataset(Valid, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
+                    valid_dataset = self.ValidDataset(Valid, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
                 else:
                     train_dataset = self.TrainDataset(Train, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
-                    valid_dataset = self.TrainDataset(Valid, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
+                    valid_dataset = self.ValidDataset(Valid, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
                 return train_dataset, valid_dataset, None
             else:
                 print(train_csv, valid_csv)
@@ -874,22 +961,28 @@ class Worker():
         plt.savefig(f"{save_path}/{condition}_loss_and_accuracy_curve.png", dpi=300, bbox_inches="tight")
         plt.close()
     
-    def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class=None):
+    def _train(self, model, modelName, criterion, optimizer, train_loader, val_loader, condition, model_save_path, loss_save_path, target_class=None, other_val_loader=None):
         n_epochs = self.file_paths['max_epoch']
         min_epoch = self.file_paths['min_epoch']
         max_notImprove = self.file_paths['max_notImprove']
+        use_other_val = self.other_validation and (other_val_loader is not None)
+
         notImprove = 0
         min_loss = 1000.
         max_acc = 0
 
         ema_model = ema(model.parameters(), decay=self.file_paths['ema_decay'])
+        scaler = torch.amp.GradScaler(device="cuda")
 
         train_loss_list = []
         train_acc_list = []
         valid_loss_list = []
         valid_acc_list = []
+        other_valid_loss_list = []
+        other_valid_acc_list = []
         iter_train_loss_list = []
         iter_valid_loss_list = []
+        iter_other_valid_loss_list = []
 
         for epoch in range(1, n_epochs+1):
             # ---------- Training ----------
@@ -899,36 +992,42 @@ class Worker():
             # These are used to record information in training.
             train_loss = []
             train_acc = []
-            train_bar = tqdm(train_loader)
 
-            for idx, batch in enumerate(train_bar):
+            for idx, batch in enumerate(tqdm(train_loader)):
                 # A batch consists of image data and corresponding labels.
                 imgs, labels, _ = batch
+                imgs = imgs.to(device, non_blocking=True)
+                optimizer.zero_grad(set_to_none=True)
 
+                # ===== AMP forward =====
                 # Forward the data. (Make sure data and model are on the same device.)
-                if target_class == None:
-                    labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                    logits = model(imgs.to(device))
-                    loss = criterion(logits, labels)
-                    preds = (torch.sigmoid(logits) >= 0.5).int()
-                    # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
-                    correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                    acc = correct_per_sample.float().mean()
-                else:            
-                    labels = (labels == target_class).to(device).unsqueeze(1).float()
-                    logits = model(imgs.to(device))
-                    loss = criterion(logits, labels)
-                    preds = (torch.sigmoid(logits) > 0.5).int()
-                    # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
-                    correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                    acc = correct_per_sample.float().mean()
+                with autocast(device_type="cuda", dtype=torch.bfloat16):
+                    if target_class == None:
+                        labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
+                        logits = model(imgs.to(device))
+                        loss = criterion(logits, labels)
+                        preds = (torch.sigmoid(logits) >= 0.5).int()
+                    else:            
+                        labels = (labels == target_class).to(device).unsqueeze(1).float()
+                        logits = model(imgs.to(device))
+                        loss = criterion(logits, labels)
+                        preds = (torch.sigmoid(logits) > 0.5).int()
+                # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
+                correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                acc = correct_per_sample.float().mean()
 
-                # Gradients stored in the parameters in the previous step should be cleared out first.
-                optimizer.zero_grad()
-                # Compute the gradients for parameters.
-                loss.backward()
-                # Update the parameters with computed gradients.
-                optimizer.step()
+                # # Gradients stored in the parameters in the previous step should be cleared out first.
+                # optimizer.zero_grad()
+                # # Compute the gradients for parameters.
+                # loss.backward()
+                # # Update the parameters with computed gradients.
+                # optimizer.step()                
+                
+                # ===== AMP backward =====
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                
                 # update EMA right after optimizer step
                 ema_model.update(model.parameters())
                 # Record the loss and accuracy.
@@ -960,41 +1059,37 @@ class Worker():
             # These are used to record information in validation.
             valid_loss = []
             valid_acc = []
-            valid_bar = tqdm(val_loader)
             # Iterate the validation set by batches.
             with torch.no_grad():
-                for idx, batch in enumerate(valid_bar):
-                    # A batch consists of image data and corresponding labels.
-                    imgs, labels, _ = batch
-                    if target_class == None:
-                        labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                        logits = model(imgs.to(device))
-                        # preds = Sigmoid(logits)
-                        loss = criterion(logits, labels)
-                        # val_acc = (logits.argmax(dim=-1) == labels.argmax(dim=-1)).float().mean()
-                        preds = (logits >= 0.5).int()
+                with autocast(device_type="cuda", dtype=torch.bfloat16):
+                    for idx, batch in enumerate(tqdm(val_loader)):
+                        # A batch consists of image data and corresponding labels.
+                        imgs, labels, _ = batch
+                        if target_class == None:
+                            labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
+                            logits = model(imgs.to(device))
+                            # preds = Sigmoid(logits)
+                            loss = criterion(logits, labels)
+                            preds = (logits >= 0.5).int()
+                        else:            
+                            labels = (labels == target_class).to(device).unsqueeze(1).float()
+                            logits = model(imgs.to(device))
+                            # preds = Sigmoid(logits)
+                            loss = criterion(logits, labels)
+                            preds = (logits > 0.5).int()
                         # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
                         correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                         val_acc = correct_per_sample.float().mean()
-                    else:            
-                        labels = (labels == target_class).to(device).unsqueeze(1).float()
-                        logits = model(imgs.to(device))
-                        # preds = Sigmoid(logits)
-                        loss = criterion(logits, labels)
-                        preds = (logits > 0.5).int()
-                        # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
-                        correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                        val_acc = correct_per_sample.float().mean()
-                    
-                    # Record the loss and accuracy.
-                    valid_loss.append(loss.cpu().item())
-                    iter_valid_loss_list.append(loss.cpu().item())
-                    valid_acc.append(val_acc.cpu().item())
-                    torch.cuda.empty_cache()
+                        
+                        # Record the loss and accuracy.
+                        valid_loss.append(loss.cpu().item())
+                        iter_valid_loss_list.append(loss.cpu().item())
+                        valid_acc.append(val_acc.cpu().item())
+                        torch.cuda.empty_cache()
 
-                    # The average loss and accuracy for entire validation set is the average of the recorded values.
-                    valid_avg_loss = sum(valid_loss) / len(valid_loss)
-                    valid_avg_acc = sum(valid_acc) / len(valid_acc)
+                        # The average loss and accuracy for entire validation set is the average of the recorded values.
+                        valid_avg_loss = sum(valid_loss) / len(valid_loss)
+                        valid_avg_acc = sum(valid_acc) / len(valid_acc)
 
             valid_loss_list.append(valid_avg_loss)
             valid_acc_list.append(valid_avg_acc)
@@ -1004,30 +1099,82 @@ class Worker():
             msg = f"[ Valid | {epoch:03d}/{n_epochs:03d} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}"
             print(msg)
 
-            training_log = pd.DataFrame({
+            if use_other_val:
+                other_valid_loss = []
+                other_valid_acc = []
+                with torch.no_grad():
+                    with autocast(device_type="cuda", dtype=torch.bfloat16):
+                        for idx, batch in enumerate(tqdm(other_val_loader)):
+                            imgs, labels, _ = batch
+                            if target_class == None:
+                                labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
+                                logits = model(imgs.to(device))
+                                loss = criterion(logits, labels)
+                                preds = (logits >= 0.5).int()
+                                correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                                val_acc = correct_per_sample.float().mean()
+                            else:            
+                                labels = (labels == target_class).to(device).unsqueeze(1).float()
+                                logits = model(imgs.to(device))
+                                loss = criterion(logits, labels)
+                                preds = (logits > 0.5).int()
+                                correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
+                                val_acc = correct_per_sample.float().mean()
+                            
+                            other_valid_loss.append(loss.cpu().item())
+                            iter_other_valid_loss_list.append(loss.cpu().item())
+                            other_valid_acc.append(val_acc.cpu().item())
+                            torch.cuda.empty_cache()
+
+                            other_valid_avg_loss = sum(other_valid_loss) / len(other_valid_loss)
+                            other_valid_avg_acc = sum(other_valid_acc) / len(other_valid_acc)
+                
+                other_valid_loss_list.append(other_valid_avg_loss)
+                other_valid_acc_list.append(other_valid_avg_acc)
+                torch.cuda.empty_cache()
+
+                msg = f"[ Other Valid | {epoch:03d}/{n_epochs:03d} ] loss = {other_valid_avg_loss:.5f}, acc = {other_valid_avg_acc:.5f}"
+                print(msg)
+
+            training_log_dict = {
                 "train_loss": train_loss_list,
                 "valid_loss": valid_loss_list,
                 "train_acc": train_acc_list,
-                "valid_acc": valid_acc_list
-            })
+                "valid_acc": valid_acc_list,
+            }
 
+            if use_other_val:
+                training_log_dict.update({
+                    "other_valid_loss": other_valid_loss_list,
+                    "other_valid_acc": other_valid_acc_list,
+                })
+
+            training_log = pd.DataFrame(training_log_dict)
+            
             training_iteration_log = pd.DataFrame({
                 "train_loss": iter_train_loss_list
             })
             validation_iteration_log = pd.DataFrame({
                 "valid_loss": iter_valid_loss_list
             })
+            if use_other_val:
+                other_validation_iteration_log = pd.DataFrame({
+                    "other_valid_loss": iter_other_valid_loss_list
+                })
 
             training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
             training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
             validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_valid_iteration_log.csv", index=False)
+            if use_other_val:
+                other_validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_other_valid_iteration_log.csv", index=False)
 
             # torch.save(ema_model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
+            update_loss = other_valid_avg_loss if use_other_val else valid_avg_loss
 
-            if valid_avg_loss < min_loss:
+            if update_loss < min_loss:
             # if valid_avg_acc > max_acc:
                 # Save model if your model improved
-                min_loss = valid_avg_loss
+                min_loss = update_loss
                 # max_acc = valid_avg_acc
                 torch.save(model.state_dict(), f"{model_save_path}/{modelName}")
                 # torch.save(ema_model.state_dict(), f"{model_save_path}/{modelName}")  # use EMA weights as "best"
@@ -1110,11 +1257,12 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        train_dataset, valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
+        train_dataset, valid_dataset, other_valid_dataset, _ = self.prepare_dataset(f"{save_path}/Data", condition, 0, "train")
         print(f"training data number: {len(train_dataset)}, validation data number: {len(valid_dataset)}")
         
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
         val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
+        other_val_loader = DataLoader(other_valid_dataset, batch_size=self.batch_size, shuffle=False) if self.other_validation else None
 
         # data_iter = iter(train_loader)
         # images, labels , file_names= next(data_iter)
@@ -1141,7 +1289,7 @@ class Worker():
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
-        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
+        self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", other_val_loader=other_val_loader)
 
     def train_multi_model(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -2030,7 +2178,7 @@ class Worker():
         acc = accuracy_score(all_labels, all_preds)
         print("Accuracy: {:.4f}".format(acc))
 
-        cm = confusion_matrix(all_labels, all_preds, labels=range(len(self.classes)))
+        cm = confusion_matrix(all_labels, all_preds, labels=range(self.class_num))
         title = f"Confusion Matrix of {_condition}_flip"
         self.plot_confusion_matrix(cm, save_path, f"{_condition}_flip", title)
 
