@@ -132,6 +132,9 @@ class Worker():
             self.transform = transform
             self.state = state
 
+            # mask = data_dict["label"] != 'N'
+            # self.data_dict = data_dict[mask].reset_index(drop=True)
+
         def __getitem__(self, id):
             index = random.randint(0, len(self.data_dict["file_name"]) - 1)
 
@@ -156,7 +159,7 @@ class Worker():
 
         def __len__(self):
             # return len(self.data_dict["file_name"])
-            return 3200
+            return 800
 
     class ValidDataset(Dataset):
         def __init__(self, data_dict, img_dir, classes, transform, state):
@@ -1006,12 +1009,14 @@ class Worker():
                         labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
                         logits = model(imgs.to(device))
                         loss = criterion(logits, labels)
-                        preds = (torch.sigmoid(logits) >= 0.5).int()
+                        preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
+                        # preds = (torch.sigmoid(logits) >= 0.5).int()
                     else:            
                         labels = (labels == target_class).to(device).unsqueeze(1).float()
                         logits = model(imgs.to(device))
                         loss = criterion(logits, labels)
-                        preds = (torch.sigmoid(logits) > 0.5).int()
+                        preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
+                        # preds = (torch.sigmoid(logits) > 0.5).int()
                 # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
                 correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                 acc = correct_per_sample.float().mean()
@@ -1068,15 +1073,15 @@ class Worker():
                         if target_class == None:
                             labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
                             logits = model(imgs.to(device))
-                            # preds = Sigmoid(logits)
                             loss = criterion(logits, labels)
-                            preds = (logits >= 0.5).int()
+                            preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
+                            # preds = (logits >= 0.5).int()
                         else:            
                             labels = (labels == target_class).to(device).unsqueeze(1).float()
                             logits = model(imgs.to(device))
-                            # preds = Sigmoid(logits)
                             loss = criterion(logits, labels)
-                            preds = (logits > 0.5).int()
+                            preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
+                            # preds = (logits > 0.5).int()
                         # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
                         correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                         val_acc = correct_per_sample.float().mean()
@@ -1110,14 +1115,16 @@ class Worker():
                                 labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
                                 logits = model(imgs.to(device))
                                 loss = criterion(logits, labels)
-                                preds = (logits >= 0.5).int()
+                                preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
+                                # preds = (logits >= 0.5).int()
                                 correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                                 val_acc = correct_per_sample.float().mean()
                             else:            
                                 labels = (labels == target_class).to(device).unsqueeze(1).float()
                                 logits = model(imgs.to(device))
                                 loss = criterion(logits, labels)
-                                preds = (logits > 0.5).int()
+                                preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
+                                # preds = (logits > 0.5).int()
                                 correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
                                 val_acc = correct_per_sample.float().mean()
                             
@@ -1595,6 +1602,13 @@ class Worker():
             y_score_mapped = [p + 1 for p in all_preds_labels]
 
             cm = confusion_matrix(y_true_mapped, y_score_mapped, labels=range(len(all_classes)))
+            cm_df = pd.DataFrame(
+                cm,
+                index=[f"True_{c}" for c in all_classes],
+                columns=[f"Pred_{c}" for c in all_classes]
+            )
+            cm_df.to_csv(f"{save_path}/Metric/{condition}_confusion_matrix.csv")
+
             title = f"Confusion Matrix of {condition}"
             self.plot_confusion_matrix(cm, save_path, condition, all_classes, title)
 
@@ -1639,6 +1653,13 @@ class Worker():
             y_pred = np.array(all_preds_labels)
 
             cm = confusion_matrix(y_true, y_pred, labels=range(len(all_classes)))
+            cm_df = pd.DataFrame(
+                cm,
+                index=[f"True_{c}" for c in all_classes],
+                columns=[f"Pred_{c}" for c in all_classes]
+            )
+            cm_df.to_csv(f"{save_path}/Metric/{condition}_confusion_matrix.csv")
+
             title = f"Confusion Matrix of {condition} ({target_class} vs others)"
             self.plot_confusion_matrix(cm, save_path, condition, all_classes, title)
 
@@ -1972,7 +1993,7 @@ class Worker():
                     self._test(test_dataset, data_info_df, model, save_path, _condition)
 
             elif self.test_model == "multi_epoch":
-                for ep in range(1, 21):
+                for ep in range(1, self.file_paths['max_epoch'] + 1):
                     if model_wsi == 'one':
                         model_path = f"{save_path}/Model/{_wsi}_{condition}_Model_epoch{ep}.ckpt"
                     else:
@@ -2351,7 +2372,7 @@ class Worker():
         if self.test_model == "multi_wsi":
             _condition = f'{__wsi}_{condition}_for_wsi_{self.test_model_wsis[0]}'
         elif self.test_model == "multi_epoch":
-            _condition = f'{__wsi}_{condition}_for_epoch_20'
+            _condition = f'{__wsi}_{condition}_for_epoch_{self.file_paths["max_epoch"]}'
         else:
             _condition = f'{__wsi}_{condition}'
         df = pd.read_csv(f"{save_path}/Metric/{_condition}_labels_predictions.csv")
@@ -2402,55 +2423,64 @@ class Worker():
 
         if self.class_num == 3:
             color_map = {
-                1: 'green',     # True Normal
-                2: 'red',       # True HCC
-                3: 'blue',      # True CC
-                12: 'orange',   # Normal -> HCC
-                13: 'yellow',   # Normal -> CC
-                21: 'cyan',     # HCC -> Normal
-                23: 'magenta',  # HCC -> CC
-                31: 'purple',   # CC -> Normal
-                32: 'brown',    # CC -> HCC
-                -1: 'lightgrey' # No Prediction
+                1: 'green',          # True Normal
+                2: 'red',            # True HCC
+                3: 'blue',           # True CC
+                12: 'lightgreen',    # Normal -> HCC
+                13: 'darkslategrey', # Normal -> CC
+                21: 'lightsalmon',   # HCC -> Normal
+                23: 'darkred',       # HCC -> CC
+                31: 'lightblue',     # CC -> Normal
+                32: 'indigo',        # CC -> HCC
+                -1: 'grey'           # No Prediction
             }
-            legend_elements = [
-                plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
-                plt.Line2D([0], [0], color='red', lw=4, label='True HCC'),
-                plt.Line2D([0], [0], color='blue', lw=4, label='True CC'),
-                plt.Line2D([0], [0], color='orange', lw=4, label='Normal -> HCC'),
-                plt.Line2D([0], [0], color='yellow', lw=4, label='Normal -> CC'),
-                plt.Line2D([0], [0], color='cyan', lw=4, label='HCC -> Normal'),
-                plt.Line2D([0], [0], color='magenta', lw=4, label='HCC -> CC'),
-                plt.Line2D([0], [0], color='purple', lw=4, label='CC -> Normal'),
-                plt.Line2D([0], [0], color='brown', lw=4, label='CC -> HCC')
+            legend_specs = [
+                (1,  'True Normal'),
+                (2,  'True HCC'),
+                (3,  'True CC'),
+
+                (12, 'Normal -> HCC'),
+                (13, 'Normal -> CC'),
+
+                (21, 'HCC -> Normal'),
+                (23, 'HCC -> CC'),
+
+                (31, 'CC -> Normal'),
+                (32, 'CC -> HCC'),
+
+                (-1, 'No Prediction'),
             ]
+
         elif self.class_num == 2:
             if self.test_type == "HCC":
                 color_map = {
-                    1: 'green',     # True Normal
-                    2: 'red',       # True HCC
-                    12: 'orange',   # Normal -> HCC
-                    21: 'cyan',     # HCC -> Normal
+                    1: 'green',         # True Normal
+                    2: 'red',           # True HCC
+                    12: 'lightgreen',   # Normal -> HCC
+                    21: 'lightsalmon',  # HCC -> Normal
                 }
-                legend_elements = [
-                    plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
-                    plt.Line2D([0], [0], color='red', lw=4, label='True HCC'),
-                    plt.Line2D([0], [0], color='orange', lw=4, label='Normal -> HCC'),
-                    plt.Line2D([0], [0], color='cyan', lw=4, label='HCC -> Normal'),
+                legend_specs = [
+                    (1,  'True Normal'),
+                    (2,  'True HCC'),
+                    (12, 'Normal -> HCC'),
+                    (21, 'HCC -> Normal'),
                 ]
+
             elif self.test_type == "CC":
                 color_map = {
-                    1: 'green',     # True Normal
-                    2: 'blue',      # True CC
-                    12: 'yellow',   # Normal -> CC
-                    21: 'purple',   # CC -> Normal
+                    1: 'green',            # True Normal
+                    2: 'blue',             # True CC
+                    12: 'darkslategrey',   # Normal -> CC
+                    21: 'lightblue',       # CC -> Normal
                 }
-                legend_elements = [
-                    plt.Line2D([0], [0], color='green', lw=4, label='True Normal'),
-                    plt.Line2D([0], [0], color='blue', lw=4, label='True CC'),
-                    plt.Line2D([0], [0], color='yellow', lw=4, label='Normal -> CC'),
-                    plt.Line2D([0], [0], color='purple', lw=4, label='CC -> Normal'),
+                legend_specs = [
+                    (1,  'True Normal'),
+                    (2,  'True CC'),
+                    (12, 'Normal -> CC'),
+                    (21, 'CC -> Normal'),
                 ]
+
+        legend_elements = [plt.Line2D([0], [0], color=color_map[k], lw=4, label=label) for k, label in legend_specs]
         plt.figure(figsize=(x_max // 20, y_max // 20))
         for label_value, color in color_map.items():
             plt.imshow(image == label_value, cmap=ListedColormap([[0,0,0,0], color]), interpolation='nearest', alpha=1)
@@ -2557,7 +2587,7 @@ class Worker():
         # --- Color map ---
         if self.class_num == 3:
             color_map = {
-                0: 'lightgrey', # No Prediction
+                0: 'grey', # No Prediction
                 1: 'green',     # Pred Normal
                 2: 'red',       # Pred HCC
                 3: 'blue',      # Pred CC
@@ -2566,6 +2596,7 @@ class Worker():
                 plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
                 plt.Line2D([0], [0], color='red', lw=4, label='Pred HCC'),
                 plt.Line2D([0], [0], color='blue', lw=4, label='Pred CC'),
+                plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
             ]
         elif self.class_num == 2:
             if self.test_type == "HCC":
