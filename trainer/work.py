@@ -58,12 +58,15 @@ class Worker():
         self.pretrain = self.file_paths['pretrain']
         self.batch_size = self.file_paths['batch_size']
         self.base_lr = float(self.file_paths['base_lr'])
+        self.loss = self.file_paths['loss']
         self.model_save_freq = self.file_paths['model_save_freq']
         self.valid_percentage = self.file_paths['valid_percentage']
 
         # Data parameters
         self.data_num = self.file_paths['data_num']
         self.data_trial = self.file_paths['data_trial'] 
+        self.hcc_data_len = self.file_paths['hcc_data_len']
+        self.cc_data_len = self.file_paths['cc_data_len']
         self.num_wsi = self.file_paths['num_wsi']
         self.load_dataset = self.file_paths['load_dataset']
         self.replay_data_num = self.file_paths['replay_data_num']
@@ -125,12 +128,13 @@ class Worker():
         ])
     
     class TrainDataset(Dataset):
-        def __init__(self, data_dict, img_dir, classes, transform, state):
+        def __init__(self, data_dict, img_dir, classes, transform, state, data_len):
             self.data_dict = data_dict
             self.img_dir = img_dir
             self.classes = classes
             self.transform = transform
             self.state = state
+            self.data_len = data_len
 
             # mask = data_dict["label"] != 'N'
             # self.data_dict = data_dict[mask].reset_index(drop=True)
@@ -158,8 +162,7 @@ class Worker():
             return image, label, img_path
 
         def __len__(self):
-            # return len(self.data_dict["file_name"])
-            return 800
+            return self.data_len
 
     class ValidDataset(Dataset):
         def __init__(self, data_dict, img_dir, classes, transform, state):
@@ -514,7 +517,7 @@ class Worker():
             for h_wsi in self.hcc_old_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
+                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
 
@@ -529,7 +532,7 @@ class Worker():
             for h_wsi in self.hcc_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
+                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
 
@@ -544,7 +547,7 @@ class Worker():
             for c_wsi in self.cc_wsis:
                 selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
                 Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
+                c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
                 c_valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
                 c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
 
@@ -571,7 +574,7 @@ class Worker():
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, data_num)
-                train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
                 valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                 test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
             
@@ -585,7 +588,7 @@ class Worker():
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, data_num)
-                train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
                 valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
             
@@ -599,7 +602,7 @@ class Worker():
                 else:
                     selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
                     Train, Valid, Test = self.split_datas(selected_data, data_num)
-                train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
                 valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                 test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
             else:
@@ -613,7 +616,7 @@ class Worker():
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
                 elif self.test_type == "HCC":
@@ -626,7 +629,7 @@ class Worker():
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
                 else:
@@ -639,7 +642,7 @@ class Worker():
                     else:
                         selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
                         Train, Valid, Test = self.split_datas(selected_data, self.data_num)
-                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
 
@@ -701,13 +704,13 @@ class Worker():
                 Train = pd.read_csv(train_csv).to_dict(orient="list")
                 Valid = pd.read_csv(valid_csv).to_dict(orient="list")
                 if state == "old":
-                    train_dataset = self.TrainDataset(Train, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
+                    train_dataset = self.TrainDataset(Train, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old", data_len=self.hcc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f"{self.hcc_old_data_dir}/{wsi}", self.classes, self.train_tfm, state="old")
                 elif wsi_type == "HCC":
-                    train_dataset = self.TrainDataset(Train, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
+                    train_dataset = self.TrainDataset(Train, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", data_len=self.hcc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f"{self.hcc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
                 else:
-                    train_dataset = self.TrainDataset(Train, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
+                    train_dataset = self.TrainDataset(Train, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new", data_len=self.cc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f"{self.cc_data_dir}/{wsi}", self.classes, self.train_tfm, state="new")
                 return train_dataset, valid_dataset, None
             else:
@@ -1005,21 +1008,22 @@ class Worker():
                 # ===== AMP forward =====
                 # Forward the data. (Make sure data and model are on the same device.)
                 with autocast(device_type="cuda", dtype=torch.bfloat16):
+                    logits = model(imgs.to(device))
                     if target_class == None:
-                        labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                        logits = model(imgs.to(device))
-                        loss = criterion(logits, labels)
-                        preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
-                        # preds = (torch.sigmoid(logits) >= 0.5).int()
-                    else:            
+                        if self.loss == 'binary_cross_entropy':
+                            labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
+                            preds = (torch.sigmoid(logits) > 0.5).int()
+                            acc = torch.all(preds == labels.int(), dim=1).float().mean()
+                        elif self.loss == 'cross_entropy':
+                            labels = labels.to(device).long()
+                            preds = logits.argmax(dim=1)
+                            acc = (preds == labels).float().mean()
+                    else:
                         labels = (labels == target_class).to(device).unsqueeze(1).float()
-                        logits = model(imgs.to(device))
-                        loss = criterion(logits, labels)
-                        preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
-                        # preds = (torch.sigmoid(logits) > 0.5).int()
-                # acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
-                correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                acc = correct_per_sample.float().mean()
+                        preds = (torch.sigmoid(logits) > 0.5).int()
+                        acc = (preds == labels.int()).float().mean()
+
+                    loss = criterion(logits, labels)
 
                 # # Gradients stored in the parameters in the previous step should be cleared out first.
                 # optimizer.zero_grad()
@@ -1070,25 +1074,26 @@ class Worker():
                     for idx, batch in enumerate(tqdm(val_loader)):
                         # A batch consists of image data and corresponding labels.
                         imgs, labels, _ = batch
+                        logits = model(imgs.to(device))
                         if target_class == None:
-                            labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                            logits = model(imgs.to(device))
-                            loss = criterion(logits, labels)
-                            preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
-                            # preds = (logits >= 0.5).int()
-                        else:            
+                            if self.loss == 'binary_cross_entropy':
+                                labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
+                                preds = (torch.sigmoid(logits) > 0.5).int()
+                                val_acc = torch.all(preds == labels.int(), dim=1).float().mean()
+                            elif self.loss == 'cross_entropy':
+                                labels = labels.to(device).long()
+                                preds = logits.argmax(dim=1)
+                                val_acc = (preds == labels).float().mean()
+                        else:
                             labels = (labels == target_class).to(device).unsqueeze(1).float()
-                            logits = model(imgs.to(device))
-                            loss = criterion(logits, labels)
-                            preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
-                            # preds = (logits > 0.5).int()
-                        # val_acc = (preds.eq(labels.int()).all(dim=1)).float().mean()
-                        correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                        val_acc = correct_per_sample.float().mean()
+                            preds = (torch.sigmoid(logits) > 0.5).int()
+                            val_acc = (preds == labels.int()).float().mean()
+
+                        val_loss = criterion(logits, labels)
                         
                         # Record the loss and accuracy.
-                        valid_loss.append(loss.cpu().item())
-                        iter_valid_loss_list.append(loss.cpu().item())
+                        valid_loss.append(val_loss.cpu().item())
+                        iter_valid_loss_list.append(val_loss.cpu().item())
                         valid_acc.append(val_acc.cpu().item())
                         torch.cuda.empty_cache()
 
@@ -1111,26 +1116,26 @@ class Worker():
                     with autocast(device_type="cuda", dtype=torch.bfloat16):
                         for idx, batch in enumerate(tqdm(other_val_loader)):
                             imgs, labels, _ = batch
+                            logits = model(imgs.to(device))
                             if target_class == None:
-                                labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                                logits = model(imgs.to(device))
-                                loss = criterion(logits, labels)
-                                preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
-                                # preds = (logits >= 0.5).int()
-                                correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                                val_acc = correct_per_sample.float().mean()
-                            else:            
+                                if self.loss == 'binary_cross_entropy':
+                                    labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
+                                    preds = (torch.sigmoid(logits) > 0.5).int()
+                                    other_val_acc = torch.all(preds == labels.int(), dim=1).float().mean()
+                                elif self.loss == 'cross_entropy':
+                                    labels = labels.to(device).long()
+                                    preds = logits.argmax(dim=1)
+                                    other_val_acc = (preds == labels).float().mean()
+                            else:
                                 labels = (labels == target_class).to(device).unsqueeze(1).float()
-                                logits = model(imgs.to(device))
-                                loss = criterion(logits, labels)
-                                preds = torch.nn.functional.one_hot((torch.sigmoid(logits)).argmax(dim=1), self.class_num).int()
-                                # preds = (logits > 0.5).int()
-                                correct_per_sample = torch.all(preds == labels.int(), dim=1)  # True/False per sample
-                                val_acc = correct_per_sample.float().mean()
+                                preds = (torch.sigmoid(logits) > 0.5).int()
+                                other_val_acc = (preds == labels.int()).float().mean()
+
+                            other_val_loss = criterion(logits, labels)
                             
-                            other_valid_loss.append(loss.cpu().item())
-                            iter_other_valid_loss_list.append(loss.cpu().item())
-                            other_valid_acc.append(val_acc.cpu().item())
+                            other_valid_loss.append(other_val_loss.cpu().item())
+                            iter_other_valid_loss_list.append(other_val_loss.cpu().item())
+                            other_valid_acc.append(other_val_acc.cpu().item())
                             torch.cuda.empty_cache()
 
                             other_valid_avg_loss = sum(other_valid_loss) / len(other_valid_loss)
@@ -1292,8 +1297,11 @@ class Worker():
             model.load_state_dict(torch.load(model_path))
         model.to(device)
         
-        
-        criterion = nn.BCEWithLogitsLoss()
+        if self.loss == 'binary_cross_entropy':
+            criterion = nn.BCEWithLogitsLoss()
+        elif self.loss == 'cross_entropy':
+            criterion = nn.CrossEntropyLoss()
+        print(criterion)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
         self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", other_val_loader=other_val_loader)
