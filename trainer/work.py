@@ -1568,6 +1568,7 @@ class Worker():
                 else:
                     label = len(classes) # unknown class
                 preds = [row[f'{cl}_pred'].values[0] for cl in classes]
+                # pred = np.argmax(preds)
                 over_threshold = [i for i, p in enumerate(preds) if p > 0.5]
                 pred = over_threshold[0] if len(over_threshold) == 1 else -1
             else:
@@ -2001,7 +2002,7 @@ class Worker():
                     self._test(test_dataset, data_info_df, model, save_path, _condition)
 
             elif self.test_model == "multi_epoch":
-                for ep in range(1, self.file_paths['max_epoch'] + 1):
+                for ep in range(self.file_paths['min_epoch'], self.file_paths['max_epoch'] + 1):
                     if model_wsi == 'one':
                         model_path = f"{save_path}/Model/{_wsi}_{condition}_Model_epoch{ep}.ckpt"
                     else:
