@@ -28,7 +28,7 @@ for wsi in wsis:
     # input_dir = f"/media/ipmclab-2/HDD8T/CC_Patch/{wsi}"
     input_dir = f"/workspace/Data/Datas/CC_Patch/{wsi}"
     if not os.path.isdir(input_dir):
-        print(f"⚠️ {input_dir} is not exist.")
+        print(f"{input_dir} is not exist.")
         continue
     all_tif_paths = [
         os.path.join(input_dir, filename)

@@ -5,13 +5,13 @@ import pandas as pd
 result_type = "Mix"
 num_wsi = 100
 data_num = "ALL"
-num_trial = 1
+num_trial = 7
 num_class = 3
 
 # base_path = f"/workspace/Data/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
 # base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
 base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_tani_test_results_new_7.csv"
+output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
 
 # Define trials and WSIs
 # HCC_wsi_list = []
@@ -66,12 +66,12 @@ def collect_results(wsi, cl, results):
         if num_wsi == 1:
             file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_test_result.csv"
         else:
-            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_test_result.csv"
+            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_9_test_result.csv"
     else:
         if num_wsi == 1:
             file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_test_result.csv"
         else:
-            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_test_result.csv"
+            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_9_test_result.csv"
         
     results = add_results(file_path, cl, wsi, num_trial, results)
 

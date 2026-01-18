@@ -1,12 +1,16 @@
 import numpy as np
 import torch
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-from sklearn.metrics import accuracy_score, confusion_matrix
 import os
 import cv2
+import shutil
+import re
+import glob
+import pandas as pd
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+from matplotlib.colors import ListedColormap
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 # print(torch.cuda.is_available())
 
@@ -86,6 +90,116 @@ def loss_curve():
 
     np.savetxt(f"{loss_save_path}/{condition}_epoch_log.csv", header = "train_loss,valid_loss,train_acc,valid_acc", delimiter=",",comments="")
 
+def count_labeled_avg():
+    CC_csv_dir = "/workspace/Data/Results/CC_NDPI/Data_Info"
+    CC_patches_save_path = "/workspace/Data/Datas/CC_Patch"
+    output_csv = f"{CC_csv_dir}/average_grayscale_per_wsi_new.csv"
+
+    results = []
+
+    for wsi_id in os.listdir(CC_csv_dir):
+        wsi_path = os.path.join(CC_csv_dir, wsi_id)
+        if not os.path.isdir(wsi_path):
+            continue
+
+        wsi_id = int(wsi_id)
+        csv_file = f"{wsi_path}/1{wsi_id:04d}_patch_in_region_filter_2_v2.csv"
+        if not os.path.exists(csv_file):
+            continue
+
+        total_rows = sum(1 for _ in open(csv_file)) - 1
+        df_iter = pd.read_csv(csv_file, chunksize=1000)
+
+        stats = {
+            "N": {"gray": 0, "b": 0, "g": 0, "r": 0, "count": 0},
+            "C": {"gray": 0, "b": 0, "g": 0, "r": 0, "count": 0},
+        }
+
+        with tqdm(total=total_rows, desc=f"WSI {wsi_id}", unit="rows") as pbar:
+            for df in df_iter:
+                for _, row in df.iterrows():
+                    patch_filename = row.iloc[0]
+                    label = row.iloc[1]
+
+                    if label not in ["N", "C"]:
+                        continue
+
+                    patch_path = f"{CC_patches_save_path}/{wsi_id}/{patch_filename}"
+                    if not os.path.exists(patch_path):
+                        continue
+
+                    img = cv2.imread(patch_path)
+                    if img is None:
+                        pbar.update(1)
+                        continue
+
+                    gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    avg_gray = np.mean(gray_image)
+
+                    b_mean = np.mean(img[:, :, 0])
+                    g_mean = np.mean(img[:, :, 1])
+                    r_mean = np.mean(img[:, :, 2])
+
+                    s = stats[label]
+                    s["count"] += 1
+                    n = s["count"]
+                    s["gray"] += (avg_gray - s["gray"]) / n
+                    s["b"]    += (b_mean - s["b"]) / n
+                    s["g"]    += (g_mean - s["g"]) / n
+                    s["r"]    += (r_mean - s["r"]) / n
+
+                    pbar.update(1)
+
+        results.append({
+            "wsi_id": wsi_id,
+            "N_gray": stats["N"]["gray"], "N_b": stats["N"]["b"], "N_g": stats["N"]["g"], "N_r": stats["N"]["r"],
+            "C_gray": stats["C"]["gray"], "C_b": stats["C"]["b"], "C_g": stats["C"]["g"], "C_r": stats["C"]["r"],
+            "N_count": stats["N"]["count"], "C_count": stats["C"]["count"],
+        })
+        print("wsi_id: ", wsi_id,\
+            "N_gray: ", stats["N"]["gray"], "N_b: ", stats["N"]["b"], "N_g: ", stats["N"]["g"], "N_r: ", stats["N"]["r"],\
+            "C_gray: ", stats["C"]["gray"], "C_b: ", stats["C"]["b"], "C_g: ", stats["C"]["g"], "C_r: ", stats["C"]["r"],\
+            "N_count: ", stats["N"]["count"], "C_count:", stats["C"]["count"])
+
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(output_csv, index=False)
+
+def count_background_avg():
+    CC_patches_save_path = "/workspace/Data/Datas/CC_Patch/131"
+
+    grays = []
+    b_vals, g_vals, r_vals = [], [], []
+
+    for x in tqdm(range(0, 4480, 448)):
+        pattern = re.compile(rf"^{x}_.+\.tif$")
+        files = [f for f in os.listdir(CC_patches_save_path) if pattern.match(f)]
+
+        for f in files:
+            img_path = f"{CC_patches_save_path}/{f}"
+            img = cv2.imread(img_path)
+            
+            color = ('b','g','r')
+            bgr_cal = []
+            for i, col in enumerate(color):
+                histr = cv2.calcHist([img],[i],None,[256],[0, 256])
+                bgr_cal.append(np.argmax(histr))
+            b, g, r = bgr_cal
+            if int(b == g == r == 0) == 1:
+                continue
+
+            gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            grays.append(np.mean(gray_image))
+
+            # channel means
+            b_vals.append(np.mean(img[:, :, 0]))  # Blue channel
+            g_vals.append(np.mean(img[:, :, 1]))  # Green channel
+            r_vals.append(np.mean(img[:, :, 2]))  # Red channel
+    
+    print("Average grayscale:", np.mean(grays))
+    print("Average Blue channel:", np.mean(b_vals))
+    print("Average Green channel:", np.mean(g_vals))
+    print("Average Red channel:", np.mean(r_vals))
+
 def plot_gray_histogram():
     # 讀取 CSV 檔案
     base_folder = "/workspace/Data/Results/CC_NDPI/Data_Info"
@@ -128,68 +242,6 @@ def plot_gray_histogram():
     # 儲存圖片
     plt.savefig(f"{base_folder}/C_avg_gray_histogram.png", dpi=300)
     plt.close()  # 關閉當前圖表
-
-def plot_confusion_matrix():
-    all_labels = []
-    all_preds = []
-
-    save_dir = "/workspace/Data/Results/Mix_NDPI/10WTC_Result/LP_6400/trial_2"
-
-    wsis =  [6, 11, 39, 52, 144]
-
-    label_dict = {"N": 0, "H": 1, "C": 2}
-
-    for _wsi in wsis:
-        # wsi = _wsi
-        wsi = f"1{_wsi:04d}"
-        save_path = f"{save_dir}/{wsi}"
-        condition = f"{wsi}_10WTC_LP6400_3_class_trial_2" 
-        df = pd.read_csv(f"{save_path}/Metric/{condition}_labels_predictions.csv")
-        labels = df['true_label'].to_list()
-        preds = df['pred_label'].to_list()
-        for label, pred in zip(labels, preds):
-            all_labels.append(label_dict[label])
-            all_preds.append(label_dict[pred])
-
-    # 把你的原資料複製一份
-    all_labels_fixed = np.array(all_labels).tolist()
-    all_preds_fixed = np.array(all_preds).tolist()
-
-    # 人為加上每一個 label 的假樣本（預設 prediction 也設成自己）
-    for label in [0, 1, 2]:
-        all_labels_fixed.append(label)
-        all_preds_fixed.append(label)
-
-    # 計算 confusion matrix
-    cm = confusion_matrix(all_labels_fixed, all_preds_fixed, labels=[0, 1, 2])
-
-    # 最後把加的那個 fake 样本在 cm 中扣掉 (每個 fake 樣本只增加 1 到對角線)
-    cm = cm - np.eye(3, dtype=int)
-
-    condition = "CC_tani_trial_2"
-    # cm = confusion_matrix(all_labels, all_preds, labels=[0, 1, 2])
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    cax = ax.matshow(cm, cmap='Blues')
-    fig.colorbar(cax)
-
-    ax.set_xticks(np.arange(3))
-    ax.set_yticks(np.arange(3))
-    ax.set_xticklabels(["N", "H", "C"], fontsize=14)
-    ax.set_yticklabels(["N", "H", "C"], fontsize=14)
-
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            color = "white" if cm[i, j] > cm.max() / 2 else "black"
-            ax.text(j, i, format(cm[i, j], 'd'), ha="center", va="center", color=color, fontsize=18)
-
-    title = f"Confusion Matrix of {condition}"
-    plt.title(title, fontsize=20, pad=20)
-    ax.set_xlabel('Predicted Label', fontsize=16, labelpad=10)
-    ax.set_ylabel('True Label', fontsize=16, labelpad=10)
-
-    plt.subplots_adjust(top=0.85)
-    plt.savefig(f"{save_dir}/Metric/{condition}_confusion_matrix.png")
 
 def threshold_classification():
     classes = ["N", "H", "C"]
@@ -246,7 +298,6 @@ def threshold_classification():
 
 def find_csv_duplicate():
     df = pd.read_csv("/workspace/Data/Results/Mix_NDPI/Generation_Training/100WTC_LP_3200/10138/trial_1/Data/10138_Gen1_ND_zscore_selected_patches_by_Gen0.csv")
-    # 找出 file_name 欄位中重複的列
     duplicates = df[df.duplicated(subset=["file_name"], keep=False)]
     print(duplicates)
 
@@ -316,9 +367,8 @@ def threshold_classification_analysis():
             df_out = pd.DataFrame(rows, columns=["WSI", "file_name", "N_pred", "H_pred", "C_pred", "pred_label","true_label"])
             df_out.to_csv(f"{base_path}/invalid_case_{case_name}.csv", index=False)
 
-    
 def rename():
-    base_dir = "/home/ipmclab/project/Results/CC_NDPI/40WTC_Result/LP_3200/trial_4"  # <-- change to your root directory
+    base_dir = "/home/ipmclab/project/Results/CC_NDPI/40WTC_Result/LP_3200/trial_4"  # change to your root directory
     old_str = "_trial_1_"
     new_str = "_trial_4_"
 
@@ -331,3 +381,109 @@ def rename():
                 
                 os.rename(old_path, new_path)
                 print(f"Renamed: {old_path} → {new_path}")
+
+def delete():
+    # Specify the directory containing images
+    image_dir = "/workspace/Data/Datas/CC_Patch"
+
+    # Specify image extensions to delete (e.g., PNG, JPG)
+    extensions = ["*.tif"]
+
+    # Loop through each extension and delete matching files
+    for ext in extensions:
+        for image_path in glob.glob(os.path.join(image_dir, ext)):
+            try:
+                os.remove(image_path)
+                print(f"Deleted: {image_path}")
+            except Exception as e:
+                print(f"Error deleting {image_path}: {e}")
+
+    print("Image deletion completed.")
+
+def result_collect_another_class():
+    result_type = "CC"
+    num_wsi = 100
+    data_num = "ALL"
+    num_trial = 1
+    num_class = 2
+    base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
+    output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_hcc_test_results.csv"
+    HCC_wsi_list = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
+    # HCC_wsi_list = []
+    # CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+    CC_wsi_list = []
+
+    def add_results(file_path, cl, wsi, num_trial, results):
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return results  # Skip if file does not exist
+
+        # Read the CSV file
+        df = pd.read_csv(file_path)
+        if cl == 'H':
+            true_is_cl = df["true_label"] == 'C'
+            pred_is_cl = df["pred_label"] == 'C'
+        else:
+            true_is_cl = df["true_label"] == 'N'
+            pred_is_cl = df["pred_label"] == 'N'
+        TP = ((true_is_cl) & (pred_is_cl)).sum()
+        FN = ((true_is_cl) & (~pred_is_cl)).sum()
+        results.append([num_trial, wsi, cl, TP, FN])
+
+        return results
+
+    def collect_results(wsi, cl, results):
+        if len(str(wsi)) == 5:
+            _wsi = int(wsi[-3:])
+            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_18_labels_predictions.csv"
+        else:
+            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_18_labels_predictions.csv"
+            
+        results = add_results(file_path, cl, wsi, num_trial, results)
+
+        return results
+
+    # Initialize result list
+    results = []
+
+    # Iterate through trials and WSIs
+    for _wsi in HCC_wsi_list:
+        wsi = _wsi
+        results = collect_results(wsi, "H", results)
+
+    for _wsi in CC_wsi_list:
+        wsi = f"1{_wsi:04d}"
+        results = collect_results(wsi, "C", results)
+
+    for _wsi in HCC_wsi_list:
+        wsi = _wsi
+        results = collect_results(wsi, "N", results)
+
+    for _wsi in CC_wsi_list:
+        wsi = f"1{_wsi:04d}"
+        results = collect_results(wsi, "N", results)
+                
+    # --- Convert to DataFrame ---
+    df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Class', 'TP', 'FN'])
+
+    # --- Separate tumor (H/C) and normal (N) ---
+    df_tumor = df[df['Class'].isin(['H', 'C'])].copy()
+    df_normal = df[df['Class'] == 'N'].copy()
+
+    # Rename N columns (TP→TN, FN→FP)
+    df_normal = df_normal.rename(columns={'TP': 'TN', 'FN': 'FP'})
+
+    # Merge on Trial, WSI, Gen, Condition
+    merged = pd.merge(
+        df_tumor,
+        df_normal[['Trial', 'WSI', 'TN', 'FP']],
+        on=['Trial', 'WSI'],
+        how='left'
+    )
+
+    # --- Final columns (remove Class) ---
+    df_output = merged[['Trial', 'WSI', 'TP', 'FN', 'TN', 'FP']]
+    print(df_output)
+    df_output.to_csv(output_file, index=False)
+
+    print(f"Processed results saved to {output_file}")

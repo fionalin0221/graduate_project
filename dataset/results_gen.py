@@ -2,12 +2,12 @@ import os
 import pandas as pd
 
 # Define paths
-result_type = "CC"
-num_wsi = 40
-data_num = 3200
-num_trial = 4
-gen = 5
-num_class = 2
+result_type = "Mix"
+num_wsi = 20
+data_num = "ALL"
+num_trial = 2
+gen = 1
+num_class = 3
 
 # base_path = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
 # base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
@@ -36,7 +36,9 @@ HCC_wsi_list = []
 # HCC_wsi_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 48, 50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64, 66, 67, 68, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 97, 99, 104, 107, 118, 120, 121, 122, 127, 129, 130, 135, 136, 138, 140, 141, 142, 144]
 # CC_wsi_list = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 178, 179, 180, 183, 184, 185, 189, 191, 192, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 263, 264, 265, 266, 269, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
 # HCC_wsi_list = [45, 49, 53, 57, 61, 65, 69, 72, 76, 80]
-CC_wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
+# CC_wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
+
+CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455] #459, 460]
 
 def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
     if not os.path.exists(file_path):
@@ -56,14 +58,23 @@ def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
     return results
 
 def collect_results(wsi, cl, results):
-    file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_{num_class}_class_test_result.csv"
+    if num_wsi == 1:
+        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_{num_class}_class_test_result.csv"
+    else:
+        file_path = f"{base_path}/trial_{num_trial}/Metric/{wsi}_{num_class}_class_test_result.csv"
     results = add_results(file_path, 0, cl, wsi, num_trial, "inference", results)
     
     for g in range(1, gen+1):
-        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_flip_test_result.csv"
+        if num_wsi == 1:
+            file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_flip_test_result.csv"
+        else:
+            file_path = f"{base_path}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_flip_test_result.csv"
         results = add_results(file_path, g, cl, wsi, num_trial, "flip", results)
 
-        file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_test_result.csv"
+        if num_wsi == 1:
+            file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_test_result.csv"
+        else:
+            file_path = f"{base_path}/trial_{num_trial}/Metric/{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}_test_result.csv"
         results = add_results(file_path, g, cl, wsi, num_trial, "inference", results)
     
     return results

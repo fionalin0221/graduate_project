@@ -1,2 +1,0 @@
-python3 crop_wsi_new.py
-python3 choose_region_new.py
