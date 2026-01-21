@@ -1,10 +1,7 @@
-import xml.etree.ElementTree as ET
 import numpy as np
 import os
-from shutil import copy
 from tqdm import tqdm
 import pandas as pd
-import matplotlib.path as mpath
 import yaml
 import cv2
 import time
@@ -12,29 +9,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def check_patch_condition(f, patches_path):
     image_path = f"{patches_path}/{f}"
-    start_read_img = time.time()
     img = cv2.imread(image_path)
     if img is None:
         return None
-    end_read_img = time.time()
-    # print(f"read img time: {end_read_img-start_read_img}")
-
-    # start_color_mean = time.time()
     # blue_mean = np.mean(img[:, :, 2])
     # red_mean = np.mean(img[:, :, 0])
     # if blue_mean <= 200 and red_mean <= 180:
     #     return 1
-    # end_color_mean = time.time()
-    # print(f"count color mean time: {end_color_mean-start_color_mean}")
-
-    start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if np.mean(gray_image) >= 230:  #white
         return None
-    end_mean_pixel = time.time()
-    # print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")
-
-    start_black_time = time.time()
     color = ('b','g','r')
     bgr_cal = []
     for i, col in enumerate(color):
@@ -43,8 +27,6 @@ def check_patch_condition(f, patches_path):
     b, g, r = bgr_cal
     if int(b == g == r == 0) == 1:
         return None
-    end_black_time = time.time()
-    # print(f"end black time: {end_black_time-start_black_time}")
     return f
 
 config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config_data.yml')
@@ -88,14 +70,14 @@ for wsi in wsis:
                     data_info['label'].append(label)
                     nums[classes.index(label)] += 1
 
-    old_dir = os.path.join(csv_dir, 'old')
-    os.makedirs(old_dir, exist_ok=True)
+    # old_dir = os.path.join(csv_dir, 'old')
+    # os.makedirs(old_dir, exist_ok=True)
 
     csv_path = os.path.join(csv_dir, f'{wsi}_patch_in_region_filter_{len(classes)}_v2.csv') 
 
-    if os.path.exists(csv_path):
-        old_csv_path = os.path.join(old_dir, os.path.basename(csv_path))
-        os.rename(csv_path, old_csv_path)
+    # if os.path.exists(csv_path):
+    #     old_csv_path = os.path.join(old_dir, os.path.basename(csv_path))
+    #     os.rename(csv_path, old_csv_path)
 
     df = pd.DataFrame(data_info)
     df.to_csv(csv_path, index=False)
