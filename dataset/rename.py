@@ -3,7 +3,6 @@ import re
 import shutil
 from tqdm import tqdm
 
-# save_offsets.py
 def extract_offsets(csv_path):
     with open(csv_path, "r") as f:
         lines = f.readlines()
@@ -32,27 +31,21 @@ def extract_offsets(csv_path):
         xs, ys = zip(*coords)
         x_min, y_min = int(min(xs)), int(min(ys))
         offsets[current_label] = (x_min, y_min)
-
-    # 輸出成 offset.txt
-    # output_file = "/workspace/Data/Datas/S17-16817A1_offsets.txt"
-    # with open(output_file, "w") as f:
-    #     for label, (x, y) in offsets.items():
-    #         f.write(f"{label} {x} {y}\n")
     return offsets
 
-# 設定資料夾與 offset
 # wsis = list(range(1, 27))
-wsis = [1, 4, 6, 7, 10, 11]
-# wsis = list(range(30, 92))
-
+wsis = list(range(30, 92))
+# base_path = '/workspace/Data/Datas/Data'
+csv_path = '/home/ipmclab-2/project/Results/HCC_NDPI'
+base_path = '/media/ipmclab-2/HDD8T/Data/DB_Backup/DB/Unbalenced'
 
 for wsi in wsis:
     print(f"Processing {wsi}...")
-    offsets = extract_offsets(f"/workspace/Data/Datas/Data/csv/{wsi}.csv")
+    offsets = extract_offsets(f"{csv_path}/csv/{wsi}.csv")
     for label, (x_offset, y_offset) in offsets.items():
         # src_folder = f"/workspace/Data/Datas/Data/DB_Backup/DB/Unbalenced/{wsi}/{label}"
-        src_folder = f"/workspace/Data/Datas/Data/Old_WSI_896/{wsi}/{label}"
-        dst_folder = f"/workspace/Data/Datas/Data/Old_WSI_896/{wsi}/{label}"
+        src_folder = f"{base_path}/{wsi}/{label}"
+        dst_folder = f"{base_path}/{wsi}/{label}"
 
         os.makedirs(dst_folder, exist_ok=True)
 
@@ -66,6 +59,7 @@ for wsi in wsis:
 
             match = re.match(rf"{label}-(\d+)-(\d+)-", fname)
             # match = re.match(rf"C{wsi}_HCC-(\d+)-(\d+)-", fname)
+            # match = re.match(rf"C{wsi}_C{wsi}_{label}-(\d+)-(\d+)-", fname)
             if not match:
                 print(f"Cannot extract: {fname}")
                 continue
