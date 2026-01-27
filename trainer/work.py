@@ -976,8 +976,7 @@ class Worker():
         min_loss = 1000.
         max_acc = 0
 
-        ema_model = ema(model.parameters(), decay=self.file_paths['ema_decay'])
-        scaler = torch.amp.GradScaler(device="cuda")
+        # ema_model = ema(model.parameters(), decay=self.file_paths['ema_decay'])
 
         train_loss_list = []
         train_acc_list = []
@@ -998,46 +997,46 @@ class Worker():
             train_loss = []
             train_acc = []
 
-            for idx, batch in enumerate(tqdm(train_loader)):
+            for idx, batch in enumerate(tqdm(train_loader, desc=f"Train | {epoch:03d}/{n_epochs:03d}")):
                 # A batch consists of image data and corresponding labels.
                 imgs, labels, _ = batch
-                imgs = imgs.to(device, non_blocking=True)
-                optimizer.zero_grad(set_to_none=True)
+                imgs, labels = imgs.to(device), labels.to(device)
 
-                # ===== AMP forward =====
-                # Forward the data. (Make sure data and model are on the same device.)
-                with autocast(device_type="cuda", dtype=torch.bfloat16):
-                    logits = model(imgs.to(device))
-                    if target_class == None:
-                        if self.loss == 'binary_cross_entropy':
-                            labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                            preds = (torch.sigmoid(logits) > 0.5).int()
-                            acc = torch.all(preds == labels.int(), dim=1).float().mean()
-                        elif self.loss == 'cross_entropy':
-                            labels = labels.to(device).long()
-                            preds = logits.argmax(dim=1)
-                            acc = (preds == labels).float().mean()
-                    else:
-                        labels = (labels == target_class).to(device).unsqueeze(1).float()
-                        preds = (torch.sigmoid(logits) > 0.5).int()
-                        acc = (preds == labels.int()).float().mean()
+                if target_class == None:
+                    if self.loss == 'binary_cross_entropy':
+                        labels_one_hot = torch.nn.functional.one_hot(labels, self.class_num).float()  # one-hot vector
+                        logits = model(imgs)
+                        loss = criterion(logits, labels_one_hot)
 
+                        probs = torch.sigmoid(logits)
+                        over_threshold = (probs > 0.5).float()
+                        preds = torch.where(
+                                (over_threshold.sum(dim=1) == 1), 
+                                probs.argmax(dim=1), 
+                                torch.tensor(-1, device=device)
+                            )
+                        acc = (preds == labels).float().mean()
+                    elif self.loss == 'cross_entropy':
+                        logits = model(imgs)
+                        loss = criterion(logits, labels.long())
+                        preds = logits.argmax(dim=1)
+                        acc = (preds == labels).float().mean()
+                else:
+                    labels = (labels == target_class).unsqueeze(1).float()
+                    logits = model(imgs)
                     loss = criterion(logits, labels)
+                    preds = (torch.sigmoid(logits) > 0.5).float()
+                    acc = (preds == labels).float().mean()
 
-                # # Gradients stored in the parameters in the previous step should be cleared out first.
-                # optimizer.zero_grad()
-                # # Compute the gradients for parameters.
-                # loss.backward()
-                # # Update the parameters with computed gradients.
-                # optimizer.step()                
-                
-                # ===== AMP backward =====
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+                # Gradients stored in the parameters in the previous step should be cleared out first.
+                optimizer.zero_grad()
+                # Compute the gradients for parameters.
+                loss.backward()
+                # Update the parameters with computed gradients.
+                optimizer.step()
                 
                 # update EMA right after optimizer step
-                ema_model.update(model.parameters())
+                # ema_model.update(model.parameters())
                 # Record the loss and accuracy.
                 train_loss.append(loss.cpu().item())
                 iter_train_loss_list.append(loss.cpu().item())
@@ -1054,51 +1053,69 @@ class Worker():
 
             torch.cuda.empty_cache()
 
+            training_iteration_log = pd.DataFrame({
+                "train_loss": iter_train_loss_list
+            })
+            training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
+
+            if epoch % self.model_save_freq == 0:
+                torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
+
             # ---------- Validation ----------
             # Make sure the model is in eval mode so that some modules like dropout are disabled and work normally.
             model.eval()
             # swap EMA weights for validation
-            ema_model.store()
-            ema_model.copy_to(model.parameters())
+            # ema_model.store()
+            # ema_model.copy_to(model.parameters())
 
-            if epoch % self.model_save_freq == 0:
-                torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
+            # if epoch % self.model_save_freq == 0:
+            #     torch.save(model.state_dict(), f"{model_save_path}/{condition}_EMA_Model_epoch{epoch}.ckpt")
 
             # These are used to record information in validation.
             valid_loss = []
             valid_acc = []
             # Iterate the validation set by batches.
             with torch.no_grad():
-                with autocast(device_type="cuda", dtype=torch.bfloat16):
-                    for idx, batch in enumerate(tqdm(val_loader)):
-                        # A batch consists of image data and corresponding labels.
-                        imgs, labels, _ = batch
-                        logits = model(imgs.to(device))
-                        if target_class == None:
-                            if self.loss == 'binary_cross_entropy':
-                                labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                                preds = (torch.sigmoid(logits) > 0.5).int()
-                                val_acc = torch.all(preds == labels.int(), dim=1).float().mean()
-                            elif self.loss == 'cross_entropy':
-                                labels = labels.to(device).long()
-                                preds = logits.argmax(dim=1)
-                                val_acc = (preds == labels).float().mean()
-                        else:
-                            labels = (labels == target_class).to(device).unsqueeze(1).float()
-                            preds = (torch.sigmoid(logits) > 0.5).int()
-                            val_acc = (preds == labels.int()).float().mean()
+                for idx, batch in enumerate(tqdm(val_loader, desc=f"Valid | {epoch:03d}/{n_epochs:03d}")):
+                    # A batch consists of image data and corresponding labels.
+                    imgs, labels, _ = batch
+                    imgs, labels = imgs.to(device), labels.to(device)
 
+                    if target_class == None:
+                        if self.loss == 'binary_cross_entropy':
+                            labels_one_hot = torch.nn.functional.one_hot(labels, self.class_num).float()  # one-hot vector
+                            logits = model(imgs)
+                            val_loss = criterion(logits, labels_one_hot)
+
+                            probs = torch.sigmoid(logits)
+                            over_threshold = (probs > 0.5).float()
+                            preds = torch.where(
+                                    (over_threshold.sum(dim=1) == 1), 
+                                    probs.argmax(dim=1), 
+                                    torch.tensor(-1, device=device)
+                                )
+                            val_acc = (preds == labels).float().mean()
+                        elif self.loss == 'cross_entropy':
+                            logits = model(imgs)
+                            val_loss = criterion(logits, labels.long())
+                            preds = logits.argmax(dim=1)
+                            val_acc = (preds == labels).float().mean()
+                    else:            
+                        labels = (labels == target_class).unsqueeze(1).float()
+                        logits = model(imgs)
                         val_loss = criterion(logits, labels)
-                        
-                        # Record the loss and accuracy.
-                        valid_loss.append(val_loss.cpu().item())
-                        iter_valid_loss_list.append(val_loss.cpu().item())
-                        valid_acc.append(val_acc.cpu().item())
-                        torch.cuda.empty_cache()
+                        preds = (torch.sigmoid(logits) > 0.5).float()
+                        val_acc = (preds == labels).float().mean()
 
-                        # The average loss and accuracy for entire validation set is the average of the recorded values.
-                        valid_avg_loss = sum(valid_loss) / len(valid_loss)
-                        valid_avg_acc = sum(valid_acc) / len(valid_acc)
+                    # Record the loss and accuracy.
+                    valid_loss.append(val_loss.cpu().item())
+                    iter_valid_loss_list.append(val_loss.cpu().item())
+                    valid_acc.append(val_acc.cpu().item())
+                    torch.cuda.empty_cache()
+
+                    # The average loss and accuracy for entire validation set is the average of the recorded values.
+                    valid_avg_loss = sum(valid_loss) / len(valid_loss)
+                    valid_avg_acc = sum(valid_acc) / len(valid_acc)
 
             valid_loss_list.append(valid_avg_loss)
             valid_acc_list.append(valid_avg_acc)
@@ -1108,37 +1125,53 @@ class Worker():
             msg = f"[ Valid | {epoch:03d}/{n_epochs:03d} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}"
             print(msg)
 
+            validation_iteration_log = pd.DataFrame({
+                "valid_loss": iter_valid_loss_list
+            })
+            validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_valid_iteration_log.csv", index=False)
+
             if use_other_val:
                 other_valid_loss = []
                 other_valid_acc = []
                 with torch.no_grad():
-                    with autocast(device_type="cuda", dtype=torch.bfloat16):
-                        for idx, batch in enumerate(tqdm(other_val_loader)):
-                            imgs, labels, _ = batch
-                            logits = model(imgs.to(device))
-                            if target_class == None:
-                                if self.loss == 'binary_cross_entropy':
-                                    labels = torch.nn.functional.one_hot(labels.to(device), self.class_num).float().to(device)  # one-hot vector
-                                    preds = (torch.sigmoid(logits) > 0.5).int()
-                                    other_val_acc = torch.all(preds == labels.int(), dim=1).float().mean()
-                                elif self.loss == 'cross_entropy':
-                                    labels = labels.to(device).long()
-                                    preds = logits.argmax(dim=1)
-                                    other_val_acc = (preds == labels).float().mean()
-                            else:
-                                labels = (labels == target_class).to(device).unsqueeze(1).float()
-                                preds = (torch.sigmoid(logits) > 0.5).int()
-                                other_val_acc = (preds == labels.int()).float().mean()
+                    for idx, batch in enumerate(tqdm(other_val_loader, desc=f"Other Valid | {epoch:03d}/{n_epochs:03d}")):
+                        # A batch consists of image data and corresponding labels.
+                        imgs, labels, _ = batch
+                        imgs, labels = imgs.to(device), labels.to(device)
 
+                        if target_class == None:
+                            if self.loss == 'binary_cross_entropy':
+                                labels_one_hot = torch.nn.functional.one_hot(labels, self.class_num).float()  # one-hot vector
+                                logits = model(imgs)
+                                other_val_loss = criterion(logits, labels_one_hot)
+
+                                probs = torch.sigmoid(logits)
+                                over_threshold = (probs > 0.5).float()
+                                preds = torch.where(
+                                        (over_threshold.sum(dim=1) == 1), 
+                                        probs.argmax(dim=1), 
+                                        torch.tensor(-1, device=device)
+                                    )
+                                other_val_acc = (preds == labels).float().mean()
+                            elif self.loss == 'cross_entropy':
+                                logits = model(imgs)
+                                other_val_loss = criterion(logits, labels.long())
+                                preds = logits.argmax(dim=1)
+                                other_val_acc = (preds == labels).float().mean()
+                        else:            
+                            labels = (labels == target_class).unsqueeze(1).float()
+                            logits = model(imgs)
                             other_val_loss = criterion(logits, labels)
-                            
-                            other_valid_loss.append(other_val_loss.cpu().item())
-                            iter_other_valid_loss_list.append(other_val_loss.cpu().item())
-                            other_valid_acc.append(other_val_acc.cpu().item())
-                            torch.cuda.empty_cache()
+                            preds = (torch.sigmoid(logits) > 0.5).float()
+                            other_val_acc = (preds == labels).float().mean()
 
-                            other_valid_avg_loss = sum(other_valid_loss) / len(other_valid_loss)
-                            other_valid_avg_acc = sum(other_valid_acc) / len(other_valid_acc)
+                        other_valid_loss.append(other_val_loss.cpu().item())
+                        iter_other_valid_loss_list.append(other_val_loss.cpu().item())
+                        other_valid_acc.append(other_val_acc.cpu().item())
+                        torch.cuda.empty_cache()
+
+                        other_valid_avg_loss = sum(other_valid_loss) / len(other_valid_loss)
+                        other_valid_avg_acc = sum(other_valid_acc) / len(other_valid_acc)
                 
                 other_valid_loss_list.append(other_valid_avg_loss)
                 other_valid_acc_list.append(other_valid_avg_acc)
@@ -1146,6 +1179,11 @@ class Worker():
 
                 msg = f"[ Other Valid | {epoch:03d}/{n_epochs:03d} ] loss = {other_valid_avg_loss:.5f}, acc = {other_valid_avg_acc:.5f}"
                 print(msg)
+
+                other_validation_iteration_log = pd.DataFrame({
+                    "other_valid_loss": iter_other_valid_loss_list
+                })
+                other_validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_other_valid_iteration_log.csv", index=False)
 
             training_log_dict = {
                 "train_loss": train_loss_list,
@@ -1161,39 +1199,17 @@ class Worker():
                 })
 
             training_log = pd.DataFrame(training_log_dict)
-            
-            training_iteration_log = pd.DataFrame({
-                "train_loss": iter_train_loss_list
-            })
-            validation_iteration_log = pd.DataFrame({
-                "valid_loss": iter_valid_loss_list
-            })
-            if use_other_val:
-                other_validation_iteration_log = pd.DataFrame({
-                    "other_valid_loss": iter_other_valid_loss_list
-                })
-
             training_log.to_csv(f"{loss_save_path}/{condition}_epoch_log.csv", index=False)
-            training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
-            validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_valid_iteration_log.csv", index=False)
-            if use_other_val:
-                other_validation_iteration_log.to_csv(f"{loss_save_path}/{condition}_other_valid_iteration_log.csv", index=False)
 
-            # torch.save(ema_model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
-            update_loss = other_valid_avg_loss if use_other_val else valid_avg_loss
-
-            if update_loss < min_loss:
-            # if valid_avg_acc > max_acc:
+            if valid_avg_loss < min_loss:
                 # Save model if your model improved
-                min_loss = update_loss
-                # max_acc = valid_avg_acc
+                min_loss = valid_avg_loss
                 torch.save(model.state_dict(), f"{model_save_path}/{modelName}")
-                # torch.save(ema_model.state_dict(), f"{model_save_path}/{modelName}")  # use EMA weights as "best"
                 notImprove = 0
             else:
                 notImprove = notImprove + 1
 
-            ema_model.restore()
+            # ema_model.restore()
 
             if epoch == min_epoch:
                 notImprove = 0
