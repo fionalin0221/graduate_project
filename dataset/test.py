@@ -433,11 +433,7 @@ def result_collect_another_class():
         return results
 
     def collect_results(wsi, cl, results):
-        if len(str(wsi)) == 5:
-            _wsi = int(wsi[-3:])
-            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_18_labels_predictions.csv"
-        else:
-            file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_18_labels_predictions.csv"
+        file_path = f"{base_path}/trial_{num_trial}/{wsi}/Metric/{wsi}_{num_wsi}WTC_LP{data_num}_{num_class}_class_trial_{num_trial}_for_epoch_18_labels_predictions.csv"
             
         results = add_results(file_path, cl, wsi, num_trial, results)
 
@@ -487,3 +483,62 @@ def result_collect_another_class():
     df_output.to_csv(output_file, index=False)
 
     print(f"Processed results saved to {output_file}")
+
+def result_collect():
+    result_type = "Mix"
+    num_wsi = 100
+    data_num = 3200
+    num_trial = 1
+    gen = 1
+    num_class = 3
+
+    HCC_wsi_list = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
+    CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+
+    # base_path = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+    # base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+    base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{num_wsi}WTC_LP_{data_num}"
+    output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_confusion_matrix.csv"
+
+    def flatten_cm(wsi, gen, pred_type):
+        if pred_type == 'inference':
+            if gen == 0:
+                file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_{num_class}_class_confusion_matrix.csv" 
+            else:
+                file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_confusion_matrix.csv" 
+        elif pred_type == 'flip':
+            file_path = f"{base_path}/{wsi}/trial_{num_trial}/Metric/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_flip_confusion_matrix.csv" 
+        df_cm = pd.read_csv(file_path, index_col=0)
+
+        cm_flattened = df_cm.stack()
+        flattened_data = {}
+        for (true_lab, pred_lab), value in cm_flattened.items():
+            column_name = f"{true_lab}_{pred_lab}"
+            flattened_data[column_name] = [value]
+
+        df_flat = pd.DataFrame(flattened_data)
+        df_flat.insert(0, 'WSI', wsi)
+        df_flat.insert(1, 'Trial', num_trial)
+        df_flat.insert(2, 'Generation', gen)
+        df_flat.insert(3, 'Condition', pred_type)
+
+        return df_flat
+
+    all_results = []
+
+    for wsi in HCC_wsi_list:
+        result = flatten_cm(wsi, 0, 'inference')
+        all_results.append(result)
+        result = flatten_cm(wsi, 1, 'flip')
+        all_results.append(result)
+    for wsi in CC_wsi_list:
+        wsi = f"1{wsi:04d}"
+        result = flatten_cm(wsi, 0, 'inference')
+        all_results.append(result)
+        result = flatten_cm(wsi, 1, 'flip')
+        all_results.append(result)
+
+    final_summary_df = pd.concat(all_results, ignore_index=True)
+    final_summary_df.to_csv(output_file, index=False)
+
+result_collect()
