@@ -941,6 +941,30 @@ class Worker():
             output = self.fc(features)
             return output
 
+    class ViTWithLinearSmall(nn.Module):
+        def __init__(self, output_dim, pretrain=True):
+            super().__init__()
+
+            self.backbone = timm.create_model(
+                'vit_small_patch16_224',
+                pretrained=pretrain,
+                num_classes=0 # remove classifier head
+            )
+            
+            # New classification head
+            self.fc = nn.Sequential(
+                nn.Linear(384, 2560),  # 384 is ViT-Small feature dim
+                nn.ReLU(),
+                nn.Linear(2560, 512),
+                nn.ReLU(),
+                nn.Linear(512, output_dim)
+            )
+
+        def forward(self, x):
+            features = self.backbone(x)
+            output = self.fc(features)
+            return output
+
     def plot_loss_acc(self, train_loss_list, valid_loss_list, train_acc_list, valid_acc_list, save_path, condition):
         epochs = range(1, len(train_loss_list) + 1)
         fig, ax1 = plt.subplots(figsize=(8, 6))
@@ -1258,6 +1282,8 @@ class Worker():
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
             model = self.ViTWithLinearTiny(output_dim=self.class_num)
+        elif self.backbone == "ViT_small":
+            model = self.ViTWithLinearSmall(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
@@ -1306,6 +1332,8 @@ class Worker():
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
             model = self.ViTWithLinearTiny(output_dim=self.class_num)
+        elif self.backbone == "ViT_small":
+            model = self.ViTWithLinearSmall(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
@@ -1348,6 +1376,8 @@ class Worker():
                 model = self.ViTWithLinear(output_dim=1)
             elif self.backbone == "ViT_tiny":
                 model = self.ViTWithLinearTiny(output_dim=1)
+            elif self.backbone == "ViT_small":
+                model = self.ViTWithLinearSmall(output_dim=1)
             else:
                 model = self.EfficientNetWithLinear(output_dim=1)
             model.to(device)
@@ -1410,6 +1440,8 @@ class Worker():
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
                 model = self.ViTWithLinearTiny(output_dim=self.class_num)
+            elif self.backbone == "ViT_small":
+                model = self.ViTWithLinearSmall(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
@@ -1490,6 +1522,8 @@ class Worker():
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
                 model = self.ViTWithLinearTiny(output_dim=self.class_num)
+            elif self.backbone == "ViT_small":
+                model = self.ViTWithLinearSmall(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
@@ -1766,6 +1800,8 @@ class Worker():
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
                 model = self.ViTWithLinearTiny(output_dim=self.class_num)
+            elif self.backbone == "ViT_small":
+                model = self.ViTWithLinearSmall(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1793,6 +1829,8 @@ class Worker():
                     model = self.ViTWithLinear(output_dim=self.class_num)
                 elif self.backbone == "ViT_tiny":
                     model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                elif self.backbone == "ViT_small":
+                    model = self.ViTWithLinearSmall(output_dim=self.class_num)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1815,6 +1853,8 @@ class Worker():
                     model = self.ViTWithLinear(output_dim=self.class_num)
                 elif self.backbone == "ViT_tiny":
                     model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                elif self.backbone == "ViT_small":
+                    model = self.ViTWithLinearSmall(output_dim=self.class_num)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -1837,6 +1877,8 @@ class Worker():
                     model = self.ViTWithLinear(output_dim=1)
                 elif self.backbone == "ViT_tiny":
                     model = self.ViTWithLinearTiny(output_dim=1)
+                elif self.backbone == "ViT_small":
+                    model = self.ViTWithLinearSmall(output_dim=1)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=1)
                 
@@ -1867,6 +1909,8 @@ class Worker():
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
             model = self.ViTWithLinearTiny(output_dim=self.class_num)
+        elif self.backbone == "ViT_small":
+            model = self.ViTWithLinearSmall(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1928,6 +1972,8 @@ class Worker():
                 model = self.ViTWithLinear(output_dim=self.class_num)
             elif self.backbone == "ViT_tiny":
                 model = self.ViTWithLinearTiny(output_dim=self.class_num)
+            elif self.backbone == "ViT_small":
+                model = self.ViTWithLinearSmall(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             model.load_state_dict(torch.load(model_path, weights_only = True))
@@ -1965,6 +2011,8 @@ class Worker():
                     model = self.ViTWithLinear(output_dim=self.class_num)
                 elif self.backbone == "ViT_tiny":
                     model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                elif self.backbone == "ViT_small":
+                    model = self.ViTWithLinearSmall(output_dim=self.class_num)
                 else:
                     model = self.EfficientNetWithLinear(output_dim=self.class_num)
                 model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1996,6 +2044,8 @@ class Worker():
                         model = self.ViTWithLinear(output_dim=self.class_num)
                     elif self.backbone == "ViT_tiny":
                         model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                    elif self.backbone == "ViT_small":
+                        model = self.ViTWithLinearSmall(output_dim=self.class_num)
                     else:
                         model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -2021,6 +2071,8 @@ class Worker():
                         model = self.ViTWithLinear(output_dim=self.class_num)
                     elif self.backbone == "ViT_tiny":
                         model = self.ViTWithLinearTiny(output_dim=self.class_num)
+                    elif self.backbone == "ViT_small":
+                        model = self.ViTWithLinearSmall(output_dim=self.class_num)
                     else:
                         model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
@@ -2046,6 +2098,8 @@ class Worker():
                         model = self.ViTWithLinear(output_dim=1)
                     elif self.backbone == "ViT_tiny":
                         model = self.ViTWithLinearTiny(output_dim=1)
+                    elif self.backbone == "ViT_small":
+                        model = self.ViTWithLinearSmall(output_dim=1)
                     else:
                         model = self.EfficientNetWithLinear(output_dim=1)
                     
@@ -2100,6 +2154,8 @@ class Worker():
             model_1 = self.ViTWithLinear(output_dim=1)
         elif self.backbone == "ViT_tiny":
             model_1 = self.ViTWithLinearTiny(output_dim=1)
+        elif self.backbone == "ViT_small":
+            model_1 = self.ViTWithLinearSmall(output_dim=1)
         else:
             model_1 = self.EfficientNetWithLinear(output_dim=1)
         
@@ -2133,6 +2189,8 @@ class Worker():
             model_2 = self.ViTWithLinear(output_dim=2)
         elif self.backbone == "ViT_tiny":
             model_2 = self.ViTWithLinearTiny(output_dim=2)
+        elif self.backbone == "ViT_small":
+            model_2 = self.ViTWithLinearSmall(output_dim=2)
         else:
             model_2 = self.EfficientNetWithLinear(output_dim=2)
         model_2.load_state_dict(torch.load(model_path, weights_only=True))
@@ -2254,6 +2312,8 @@ class Worker():
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
             model = self.ViTWithLinearTiny(output_dim=self.class_num)
+        elif self.backbone == "ViT_small":
+            model = self.ViTWithLinearSmall(output_dim=self.class_num)
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
