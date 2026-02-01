@@ -39,7 +39,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 class Worker():
     def __init__(self, config):
-        current_computer = config['current_computer']
+        self.current_computer = config['current_computer']
 
         self.wsi_type = config['type']
         self.state = config['state']
@@ -47,7 +47,7 @@ class Worker():
         self.generation = config['generation']
         self.patch_size = config['patch_size']
 
-        self.file_paths = config['computers'][current_computer]['file_paths']
+        self.file_paths = config['computers'][self.current_computer]['file_paths']
         class_list = config["class_list"]
         self.classes = [class_list[i] for i in self.file_paths['classes']]
         self.class_num = len(self.classes)
@@ -651,7 +651,10 @@ class Worker():
 
         if self.other_validation and data_stage == "train":
             for h_wsi in self.valid_hcc_old_wsis:
-                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
+                if self.current_computer == "docker":
+                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2_sampled.csv')
+                else:
+                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
                 _, Valid, _ = self.split_datas(selected_data, self.other_valid_size, f'{self.hcc_old_data_dir}/{h_wsi}', valid_percentage=1.0)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
 
@@ -659,7 +662,10 @@ class Worker():
                 other_valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
 
             for h_wsi in self.valid_hcc_wsis:
-                selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
+                if self.current_computer == "docker":
+                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2_sampled.csv')
+                else:
+                    selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
                 _, Valid, _ = self.split_datas(selected_data, self.other_valid_size, f'{self.hcc_data_dir}/{h_wsi}', valid_percentage=1.0)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
 
@@ -667,7 +673,10 @@ class Worker():
                 other_valid_data.extend(pd.DataFrame(Valid).to_dict(orient='records'))
 
             for c_wsi in self.valid_cc_wsis:
-                selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
+                if self.current_computer == "docker":
+                    selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2_sampled.csv')
+                else:
+                    selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
                 _, Valid, _ = self.split_datas(selected_data, self.other_valid_size, f'{self.cc_data_dir}/{c_wsi}', valid_percentage=1.0)
                 c_valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
 
@@ -1386,10 +1395,10 @@ class Worker():
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
 
-    def flip_wsi(self, wsi, gen, test_state=None, test_type=None, save_path=None, mode="ideal", labeled = True):
+    def flip_wsi(self, wsi, gen, test_state=None, test_type=None, save_path=None, mode="ideal", model_wsi="one", labeled = True):
         if test_state == None:
             test_state = self.test_state
-        if self.test_type == None:
+        if test_type == None:
             test_type = self.test_type
             
         if test_state == "old":
@@ -1400,7 +1409,10 @@ class Worker():
             _wsi = f"1{wsi:04d}"
 
         if save_path == None:
-            save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}/{_wsi}'
+            if model_wsi == "one":
+                save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
+            else:
+                save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}/{_wsi}'
 
         if labeled:
             self.test_TATI(wsi, gen-1, save_path, mode, test_state=test_state, test_type=test_type)
@@ -2405,24 +2417,25 @@ class Worker():
         plt.close()
 
     def plot_TI_Result(self, wsi, gen, save_path = None, mode = 'ideal', model_wsi = 'one'):
-        if save_path == None:
-            _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
-            __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
+        _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
+        __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
-            if model_wsi == 'one':
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
-            else:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+            if save_path == None:
+                if model_wsi == 'one':
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
+                else:
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            if self.num_wsi == 1:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
-            else:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
+            if save_path == None:
+                if self.num_wsi == 1:
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
+                else:
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
         
         if self.test_model == "multi_wsi":
             _condition = f'{__wsi}_{condition}_for_wsi_{self.test_model_wsis[0]}'
@@ -2550,24 +2563,25 @@ class Worker():
         print(f"WSI {wsi} already plot the pred_vs_gt image")
 
     def plot_all_result(self, wsi, gen, save_path = None, mode = 'selected', plot_type = 'pred', model_wsi = 'one', plot_heatmap = False, plot_boundary = False):
-        if save_path == None:
-            _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
-            __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
+        _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
+        __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
-            if model_wsi == 'one':
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
-            else:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+            if save_path == None:
+                if model_wsi == 'one':
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
+                else:
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            if self.test_model == "self":
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
-            else:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
+            if save_path == None:
+                if self.test_model == "self":
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
+                else:
+                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{__wsi}"
         
         _condition = f'{__wsi}_{condition}'
 
@@ -2739,20 +2753,20 @@ class Worker():
                 plt.close()
                 print(f"WSI {wsi} per-class heatmap for {cl} saved.")
 
-    def plot_TI_Result_gt_boundary(self, wsi, gen, save_path):
-        if save_path == None:
-            _wsi = wsi+91 if (self.state == "new" and self.wsi_type == "HCC") else wsi
-            __wsi = wsi if self.state == "old" else (wsi+91 if self.wsi_type == "HCC" else f"1{wsi:04d}")
+    def plot_TI_Result_gt_boundary(self, wsi, gen, save_path=None):
+        _wsi = wsi+91 if (self.state == "new" and self.wsi_type == "HCC") else wsi
+        __wsi = wsi if self.state == "old" else (wsi+91 if self.wsi_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
-            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
+            if save_path == None:
+                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
                 condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            save_dir = os.path.join(self.file_paths[f'{self.test_model}_model_path'], f"LP_{self.data_num}/trial_{self.num_trial}") 
-            save_path = f"{save_dir}/{_wsi}" 
+            if save_path == None:
+                save_path = f"{self.file_paths[f'{self.test_model}_model_path']}/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}" 
 
         df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
         # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
