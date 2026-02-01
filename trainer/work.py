@@ -1559,7 +1559,10 @@ class Worker():
         if classes is None:
             classes = self.classes
         
-        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
+        if self.current_computer == "docker":
+            test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True, prefetch_factor=1)
+        else:
+            test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
         model.eval()
 
