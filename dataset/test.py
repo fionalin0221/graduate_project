@@ -541,4 +541,39 @@ def result_collect():
     final_summary_df = pd.concat(all_results, ignore_index=True)
     final_summary_df.to_csv(output_file, index=False)
 
-result_collect()
+        
+def sample_patches():
+    seed = 42
+    valid_HCC_wsis = [14, 26, 42, 60, 62, 63, 68, 69, 77, 78, 79, 80, 87, 89, 90, 92, 95, 98, 99, 103]
+    valid_CC_wsis = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+
+    def move_patches(wsi_type, wsi, sampled_df):
+        src_folder = f"/workspace/temp_folder/{wsi_type}_Patch/{wsi}"
+        dst_folder = f"/workspace/Data/Datas/{wsi_type}_Patch/{wsi}"
+        os.makedirs(dst_folder, exist_ok=True)
+        for filename in tqdm(sampled_df['file_name']):
+            src = os.path.join(src_folder, filename)
+            dst = os.path.join(dst_folder, filename)
+            shutil.copy2(src, dst)
+
+    for wsi in valid_HCC_wsis:
+        base_path = "/workspace/Data/Results/HCC_NDPI/Data_Info"
+        df = pd.read_csv(f"{base_path}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv")
+        sampled_df = pd.concat([
+            df[df['label'] == label].sample(n=100, random_state=seed) 
+            for label in ['N', 'H']
+        ])
+        sampled_df.to_csv(f"{base_path}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2_sampled.csv", index=False)
+        move_patches("HCC", wsi, sampled_df)
+
+    for wsi in valid_CC_wsis:
+        base_path = "/workspace/Data/Results/CC_NDPI/Data_Info"
+        df = pd.read_csv(f"{base_path}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv")
+        sampled_df = pd.concat([
+            df[df['label'] == label].sample(n=100, random_state=seed) 
+            for label in ['N', 'C']
+        ])
+        sampled_df.to_csv(f"{base_path}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2_sampled.csv", index=False)
+        move_patches("CC", wsi, sampled_df)
+
+sample_patches()
