@@ -13,7 +13,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torchvision.datasets import DatasetFolder
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc, roc_auc_score
+from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc, roc_auc_score, f1_score
 from skimage.morphology import dilation
 from skimage.segmentation import find_boundaries
 from skimage.measure import find_contours
@@ -1013,10 +1013,13 @@ class Worker():
 
         train_loss_list = []
         train_acc_list = []
+        train_f1_list = []
         valid_loss_list = []
         valid_acc_list = []
+        valid_f1_list = []
         other_valid_loss_list = []
         other_valid_acc_list = []
+        other_valid_f1_list = []
         iter_train_loss_list = []
         iter_valid_loss_list = []
         iter_other_valid_loss_list = []
@@ -1029,6 +1032,8 @@ class Worker():
             # These are used to record information in training.
             train_loss = []
             train_acc = []
+            train_labels = []
+            train_preds = []
 
             for idx, batch in enumerate(tqdm(train_loader, desc=f"Train | {epoch:03d}/{n_epochs:03d}")):
                 # A batch consists of image data and corresponding labels.
@@ -1074,6 +1079,8 @@ class Worker():
                 train_loss.append(loss.cpu().item())
                 iter_train_loss_list.append(loss.cpu().item())
                 train_acc.append(acc.cpu().item())
+                train_labels.extend(labels.cpu().numpy())
+                train_preds.extend(preds.cpu().numpy())
                 torch.cuda.empty_cache()
                     
                 train_avg_loss = sum(train_loss) / len(train_loss)
@@ -1081,7 +1088,10 @@ class Worker():
                 
             train_loss_list.append(train_avg_loss)
             train_acc_list.append(train_avg_acc)
-            msg = f"[ Train | {epoch:03d}/{n_epochs:03d} ] loss = {train_avg_loss:.5f}, acc = {train_avg_acc:.5f}"
+            labels_present = np.unique(train_labels)
+            train_f1 = f1_score(train_labels, train_preds, labels=labels_present, average='macro', zero_division=0)
+            train_f1_list.append(train_f1)
+            msg = f"[ Train | {epoch:03d}/{n_epochs:03d} ] loss = {train_avg_loss:.5f}, acc = {train_avg_acc:.5f}, f1 = {train_f1:.5f}"
             print(msg)
 
             torch.cuda.empty_cache()
@@ -1107,6 +1117,8 @@ class Worker():
             # These are used to record information in validation.
             valid_loss = []
             valid_acc = []
+            valid_labels = []
+            valid_preds = []
             # Iterate the validation set by batches.
             with torch.no_grad():
                 for idx, batch in enumerate(tqdm(val_loader, desc=f"Valid | {epoch:03d}/{n_epochs:03d}")):
@@ -1144,6 +1156,8 @@ class Worker():
                     valid_loss.append(val_loss.cpu().item())
                     iter_valid_loss_list.append(val_loss.cpu().item())
                     valid_acc.append(val_acc.cpu().item())
+                    valid_labels.extend(labels.cpu().numpy())
+                    valid_preds.extend(preds.cpu().numpy())
                     torch.cuda.empty_cache()
 
                     # The average loss and accuracy for entire validation set is the average of the recorded values.
@@ -1152,10 +1166,13 @@ class Worker():
 
             valid_loss_list.append(valid_avg_loss)
             valid_acc_list.append(valid_avg_acc)
+            labels_present = np.unique(valid_labels)
+            valid_f1 = f1_score(valid_labels, valid_preds, labels=labels_present, average='macro', zero_division=0)
+            valid_f1_list.append(valid_f1)
             torch.cuda.empty_cache()
 
             # Print the information.
-            msg = f"[ Valid | {epoch:03d}/{n_epochs:03d} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}"
+            msg = f"[ Valid | {epoch:03d}/{n_epochs:03d} ] loss = {valid_avg_loss:.5f}, acc = {valid_avg_acc:.5f}, f1 = {valid_f1:.5f}"
             print(msg)
 
             validation_iteration_log = pd.DataFrame({
@@ -1166,6 +1183,8 @@ class Worker():
             if use_other_val:
                 other_valid_loss = []
                 other_valid_acc = []
+                other_valid_labels = []
+                other_valid_preds = []
                 with torch.no_grad():
                     for idx, batch in enumerate(tqdm(other_val_loader, desc=f"Other Valid | {epoch:03d}/{n_epochs:03d}")):
                         # A batch consists of image data and corresponding labels.
@@ -1201,6 +1220,8 @@ class Worker():
                         other_valid_loss.append(other_val_loss.cpu().item())
                         iter_other_valid_loss_list.append(other_val_loss.cpu().item())
                         other_valid_acc.append(other_val_acc.cpu().item())
+                        other_valid_labels.extend(labels.cpu().numpy())
+                        other_valid_preds.extend(preds.cpu().numpy())
                         torch.cuda.empty_cache()
 
                         other_valid_avg_loss = sum(other_valid_loss) / len(other_valid_loss)
@@ -1208,9 +1229,12 @@ class Worker():
                 
                 other_valid_loss_list.append(other_valid_avg_loss)
                 other_valid_acc_list.append(other_valid_avg_acc)
+                labels_present = np.unique(other_valid_labels)
+                other_valid_f1 = f1_score(other_valid_labels, other_valid_preds, labels=labels_present, average='macro', zero_division=0)
+                other_valid_f1_list.append(other_valid_f1)
                 torch.cuda.empty_cache()
 
-                msg = f"[ Other Valid | {epoch:03d}/{n_epochs:03d} ] loss = {other_valid_avg_loss:.5f}, acc = {other_valid_avg_acc:.5f}"
+                msg = f"[ Other Valid | {epoch:03d}/{n_epochs:03d} ] loss = {other_valid_avg_loss:.5f}, acc = {other_valid_avg_acc:.5f}, f1 = {other_valid_f1:.5f}"
                 print(msg)
 
                 other_validation_iteration_log = pd.DataFrame({
@@ -1223,12 +1247,15 @@ class Worker():
                 "valid_loss": valid_loss_list,
                 "train_acc": train_acc_list,
                 "valid_acc": valid_acc_list,
+                "train_f1": train_f1_list,
+                "valid_f1": valid_f1_list,
             }
 
             if use_other_val:
                 training_log_dict.update({
                     "other_valid_loss": other_valid_loss_list,
                     "other_valid_acc": other_valid_acc_list,
+                    "other_valid_f1": other_valid_f1_list,
                 })
 
             training_log = pd.DataFrame(training_log_dict)
@@ -1652,9 +1679,11 @@ class Worker():
             classes = self.classes
         
         acc = accuracy_score(all_labels, all_preds_labels)
-        print("Accuracy: {:.4f}".format(acc))
+        labels_present = np.unique(all_labels)
+        f1 = f1_score(all_labels, all_preds_labels, labels=labels_present, average='macro', zero_division=0)
+        print("Accuracy: {:.4f}".format(acc), " F1 Score: {:.4f}".format(f1))
 
-        Test_Acc = {"Condition": [condition], "Accuracy": [acc]}
+        Test_Acc = {"Condition": [condition], "Accuracy": [acc], "F1 Score": [f1]}
         if target_class is None:
             all_classes = ['unknown'] + classes
             y_true_mapped = [l + 1 for l in all_labels]
@@ -2228,7 +2257,7 @@ class Worker():
         
         self.compute_metrics(all_labels, all_preds_labels, df_pred_score, save_path, _condition, compute_roc=False)
     
-    def test_flip(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one'):
+    def test_flip(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one', classes=None):
         ### Multi-WTC Evaluation ###
         if self.test_state == "old":
             _wsi = wsi
@@ -2242,6 +2271,8 @@ class Worker():
                 save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
             else:
                 save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+        if classes == None:
+            classes = self.classes
 
         condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
         
@@ -2267,24 +2298,24 @@ class Worker():
         label_inRegion = match_df['label'].to_list()
 
         for idx, filename in enumerate(tqdm(filename_inRegion)):
-            label = self.classes.index(label_inRegion[idx])
+            label = classes.index(label_inRegion[idx])
             results_df["file_name"].append(filename)
             row = pred_df[pred_df['file_name'] == filename]
             pred_label = row['label'].values[0]
-            pred = self.classes.index(pred_label)
+            pred = classes.index(pred_label)
 
             all_labels.append(label)
             all_preds_labels.append(pred)
 
-        text_labels = [self.classes[label] for label in all_labels]
-        text_preds = [self.classes[pred] for pred in all_preds_labels]
+        text_labels = [classes[label] for label in all_labels]
+        text_preds = [classes[pred] for pred in all_preds_labels]
 
         results_df["true_label"] = text_labels
         results_df["pred_label"] = text_preds
 
         # Save to CSV
         pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{_condition}_flip_labels_predictions.csv", index=False)
-        self.compute_metrics(all_labels, all_preds_labels, pred_df, save_path, _condition, compute_roc=False)
+        self.compute_metrics(all_labels, all_preds_labels, pred_df, save_path, _condition, compute_roc=False, classes=classes)
 
     def test_all(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one', test_state=None, test_type=None):
         ### Multi-WTC Evaluation ###
@@ -2453,14 +2484,6 @@ class Worker():
         ### Get (x, y, pseudo-label) of every patch ###
         all_pts = []
         for idx, img_name in enumerate(all_patches):
-            # if self.test_state == "old":
-            #     match = re.search(r'-(\d+)-(\d+)-\d{5}x\d{5}', img_name)
-            #     if match:
-            #         x = match.group(1)
-            #         y = match.group(2)
-            #     else:
-            #         print("Style Error")
-            # else:
             x, y = img_name[:-4].split('_')
 
             x = (int(x)) // self.patch_size
@@ -2612,7 +2635,7 @@ class Worker():
                 if df['label'][idx] != 'unknown':
                     pred_label  = self.classes.index(df['label'][idx])
                 else:
-                    pred_label = -1
+                    pred_label = -2
                 all_pts.append([x, y, pred_label+1])
 
         else:
@@ -2627,7 +2650,7 @@ class Worker():
                 if len(over_threshold) == 1:
                     pred_label = over_threshold[0]
                 else:
-                    pred_label = -1
+                    pred_label = -2
 
                 x = (int(x)) // self.patch_size
                 y = (int(y)) // self.patch_size
@@ -2646,20 +2669,19 @@ class Worker():
         gt_patches = gt_df['file_name'].to_list()
         for idx, img_name in enumerate(gt_patches):
             x, y = img_name[:-4].split('_')
-            gt_label  = self.classes.index(gt_df['label'][idx])
             x = (int(x)) // self.patch_size
             y = (int(y)) // self.patch_size
-            gt_pts.append([x, y, gt_label + 1])
+            gt_pts.append([x, y])
 
         gt_pts = np.array(gt_pts)
         gt_mask = np.zeros((y_max + 1, x_max + 1), np.uint8)
-        for x, y, label in gt_pts:
-            gt_mask[y, x] = label
+        for x, y in gt_pts:
+            gt_mask[y, x] = 1
 
         # --- Color map ---
         if self.class_num == 3:
             color_map = {
-                0: 'grey', # No Prediction
+                -1: 'grey',      # No Prediction
                 1: 'green',     # Pred Normal
                 2: 'red',       # Pred HCC
                 3: 'blue',      # Pred CC
@@ -2671,23 +2693,30 @@ class Worker():
                 plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
             ]
         elif self.class_num == 2:
-            if self.test_type == "HCC":
+            # if self.test_type == "HCC":
+            if self.wsi_type == "HCC":
                 color_map = {
+                    -1: 'grey',      # No Prediction
                     1: 'green',     # Pred Normal
                     2: 'red',       # Pred HCC
+                    
                 }
                 legend_elements = [
                     plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
                     plt.Line2D([0], [0], color='red', lw=4, label='Pred HCC'),
+                    plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
                 ]
-            elif self.test_type == "CC":
+            # elif self.test_type == "CC":
+            elif self.wsi_type == "CC":
                 color_map = {
+                    -1: 'grey',      # No Prediction
                     1: 'green',     # Pred Normal
                     2: 'blue',      # Pred CC
                 }
                 legend_elements = [
                     plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
                     plt.Line2D([0], [0], color='blue', lw=4, label='Pred CC'),
+                    plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
                 ]
         plt.figure(figsize=(x_max/10, y_max/10))
         for label_value, color in color_map.items():
@@ -2756,96 +2785,3 @@ class Worker():
                 plt.close()
                 print(f"WSI {wsi} per-class heatmap for {cl} saved.")
 
-    def plot_TI_Result_gt_boundary(self, wsi, gen, save_path=None):
-        _wsi = wsi+91 if (self.state == "new" and self.wsi_type == "HCC") else wsi
-        __wsi = wsi if self.state == "old" else (wsi+91 if self.wsi_type == "HCC" else f"1{wsi:04d}")
-        if self.gen_type:
-            if save_path == None:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
-            if gen == 0:
-                condition = f'{self.class_num}_class'
-            else:
-                condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
-        else:
-            condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
-            if save_path == None:
-                save_path = f"{self.file_paths[f'{self.test_model}_model_path']}/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}" 
-
-        df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
-        # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
-        gt = pd.read_csv(f"{self.cc_csv_dir}/{wsi}/{__wsi}_patch_in_region_filter_2_v2.csv") if self.wsi_type == "CC" \
-            else pd.read_csv(f"{self.hcc_csv_dir}/{wsi}/{__wsi}_patch_in_region_filter_2_v2.csv")
-        
-        pred_patches = df['file_name'].to_list() #patches_in_hcc_hulls
-        gt_patches = gt['file_name'].to_list()
-
-        ### Get (x, y, pseudo-label) of every patch ###
-        pred_pts, gt_pts = [], []
-        for idx, img_name in enumerate(pred_patches):
-            if self.state == "old":
-                match = re.search(r'-(\d+)-(\d+)-\d{5}x\d{5}', img_name)
-                if match:
-                    x = match.group(1)
-                    y = match.group(2)
-                else:
-                    print("Style Error")
-            else:
-                x, y = img_name[:-4].split('_')
-
-            pred_label  = self.classes.index(df['pred_label'][idx])  # N=0, H=1
-            # label = 1 if df['H_pred'][idx] > df["N_pred"][idx] else 0
-
-            x = (int(x)) // self.patch_size
-            y = (int(y)) // self.patch_size
-            
-            pred_pts.append([x, y, pred_label])
-
-        for idx, img_name in enumerate(gt_patches):
-            if self.state == "old":
-                match = re.search(r'-(\d+)-(\d+)-\d{5}x\d{5}', img_name)
-                if match:
-                    x = match.group(1)
-                    y = match.group(2)
-                else:
-                    print("Style Error")
-            else:
-                x, y = img_name[:-4].split('_')
-
-            gt_label  = self.classes.index(gt['label'][idx])  # N=0, H=1
-            # label = 1 if df['H_pred'][idx] > df["N_pred"][idx] else 0
-
-            x = (int(x)) // self.patch_size
-            y = (int(y)) // self.patch_size
-            
-            gt_pts.append([x, y, gt_label])
-
-        pred_pts = np.array(pred_pts)
-        gt_pts = np.array(gt_pts)
-        
-        x_max = max(np.max(pred_pts[:, 0]), np.max(gt_pts[:, 0]))
-        y_max = max(np.max(pred_pts[:, 1]), np.max(gt_pts[:, 1]))
-
-        pred_labels = np.zeros((y_max + 1, x_max + 1), np.uint8)
-        gt_labels = np.zeros((y_max + 1, x_max + 1), np.uint8)
-
-        for x, y, label in pred_pts:
-            pred_labels[y, x] = label + 1
-
-        for x, y, label in gt_pts:
-            gt_labels[y, x] = label + 1
-
-        plt.imshow(pred_labels == 2, cmap=ListedColormap(['white', 'red']), interpolation='nearest', alpha=0.5)  # Pred - HCC
-        plt.imshow(pred_labels == 1, cmap=ListedColormap(['white', 'green']), interpolation='nearest', alpha=0.5)  # Pred - Normal
-        # plt.imshow(fib_patches_labels, cmap=ListedColormap(['white', 'blue']), interpolation='nearest', alpha=0.5)
-
-        gt_HCC_boundaries = find_boundaries(gt_labels == 2, mode='inner')  # HCC (red)
-        gt_Norm_boundaries = find_boundaries(gt_labels == 1, mode='inner')  # Normal (green)
-        plt.contour(gt_HCC_boundaries, colors='red', linewidths=1.2)
-        plt.contour(gt_Norm_boundaries, colors='green', linewidths=1.2)
-
-        _wsi = wsi+91 if (self.state == "new" and self.wsi_type == "HCC") else wsi
-        # plt.show()
-        plt.savefig(f"{save_path}/Metric/{wsi}_pred_vs_gt.png")
-        plt.tight_layout()
-        plt.axis("off")
-        plt.close()
