@@ -51,21 +51,14 @@ def Point_in_Region(point, region):
         return False
 
 def check_patch_condition(image_path):
-    start_read_img = time.time()
     img = cv2.imread(image_path)
     if img is None:
         return 1
-    end_read_img = time.time()
-    # print(f"read img time: {end_read_img-start_read_img}")
 
-    start_mean_pixel = time.time()
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if np.mean(gray_image) >= 230:  #white
         return 1
-    end_mean_pixel = time.time()
-    # print(f"count mean pixel time: {end_mean_pixel-start_mean_pixel}")
 
-    start_black_time = time.time()
     color = ('b','g','r')
     bgr_cal = []
     for i, col in enumerate(color):
@@ -74,8 +67,6 @@ def check_patch_condition(image_path):
     b, g, r = bgr_cal
     if int(b == g == r == 0) == 1:
         return 1
-    end_black_time = time.time()
-    # print(f"end black time: {end_black_time-start_black_time}")
     return 0
 
 def process_image(f, patches_path, all_region, classes):

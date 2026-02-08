@@ -16,15 +16,15 @@ config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'co
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 current_computer = config['current_computer']
-type = config['type']
+wsi_type = config['type']
 state = config['state']
 file_paths = config['computers'][current_computer]['file_paths']
 
-if type == "HCC":
-    ndpi_path = file_paths[f'{type}_{state}_ndpi_path']
+if wsi_type == "HCC":
+    ndpi_path = file_paths[f'{wsi_type}_{state}_ndpi_path']
 else:
-    ndpi_path = file_paths[f'{type}_ndpi_path']
-wsis =  file_paths[f'{type}_wsis']
+    ndpi_path = file_paths[f'{wsi_type}_ndpi_path']
+wsis =  file_paths[f'{wsi_type}_wsis']
 
 if current_computer == "docker":
     OPENSLIDE_PATH = file_paths['OPENSLIDE_PATH']
@@ -56,20 +56,20 @@ patch_size = 448
 
 for wsi in wsis:
     try:
-        print(f"Crop {type} WSI-{wsi}...")
+        print(f"Crop {wsi_type} WSI-{wsi}...")
         start = time.time()
-        if type == "HCC":
+        if wsi_type == "HCC":
             ndpi = f"{ndpi_path}/LIVER_{wsi:05d}.ndpi"
-        elif type == "CC":
+        elif wsi_type == "CC":
             ndpi = f"{ndpi_path}/LIVER_1{wsi:04d}.ndpi"
         wsi_openslide = openslide.OpenSlide(ndpi)
         p_w = wsi_openslide.dimensions[0] // patch_size + 1
         p_h = wsi_openslide.dimensions[1] // patch_size + 1
         
-        if type == "HCC":
-            patches_save_path = os.path.join(file_paths[f'{type}_{state}_patches_save_path'], f"{wsi}")
+        if wsi_type == "HCC" and state == "old":
+            patches_save_path = os.path.join(file_paths[f'{wsi_type}_{state}_patches_save_path'], f"{wsi}")
         else:
-            patches_save_path = os.path.join(file_paths[f'{type}_patches_save_path'], f"{wsi}")
+            patches_save_path = os.path.join(file_paths[f'{wsi_type}_patches_save_path'], f"{wsi}")
 
         if not os.path.exists(patches_save_path):
             os.makedirs(patches_save_path)
