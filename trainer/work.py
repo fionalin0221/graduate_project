@@ -83,6 +83,11 @@ class Worker():
         self.test_model_state = self.file_paths['test_model_state']
         self.test_model_type = self.file_paths['test_model_type']
 
+        # Generation parameters
+        self.base_model_trial = self.file_paths['base_model_trial']
+        self.base_model_data_num = self.file_paths['base_model_data_num']
+        self.base_model_num_wsi = self.file_paths['base_model_num_wsi']
+
         if self.gen_type:
             self.save_dir = self.file_paths[f'{self.wsi_type}_generation_save_path']
             os.makedirs(self.save_dir, exist_ok=True)
@@ -1437,14 +1442,14 @@ class Worker():
 
         if save_path == None:
             if model_wsi == "one":
-                save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
+                save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
             else:
-                save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}/{_wsi}'
+                save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
 
         if labeled:
-            self.test_TATI(wsi, gen-1, save_path, mode, test_state=test_state, test_type=test_type)
+            self.test_TATI(wsi, gen-1, save_path, mode, test_state=test_state, test_type=test_type, model_wsi=model_wsi)
         else:
-            self.test_all(wsi, gen-1, save_path, mode, test_state=test_state, test_type=test_type)
+            self.test_all(wsi, gen-1, save_path, mode, test_state=test_state, test_type=test_type, model_wsi=model_wsi)
         self.build_pl_dataset(wsi, gen, save_path, mode, labeled, test_state=test_state, test_type=test_type)
 
     def train_generation_one_WSI(self, wsi, mode="ideal", labeled = True):
@@ -1455,7 +1460,8 @@ class Worker():
         elif self.test_type == "CC":
             _wsi = f"1{wsi:04d}"
 
-        save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}/{_wsi}'
+        # save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}/{_wsi}'
+        save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1484,7 +1490,8 @@ class Worker():
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
-                model_path = self.file_paths[f'{self.test_model}_model_path']
+                # model_path = self.file_paths[f'{self.test_model}_model_path']
+                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
                 model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
                 model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_1WTC.ckpt"
@@ -1500,7 +1507,7 @@ class Worker():
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
 
     def train_generation(self, mode="ideal", labeled = True, replay = False):
-        save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
+        save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1526,7 +1533,7 @@ class Worker():
                     if self.load_dataset:
                         train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
                     else:
-                        self.flip_wsi(wsi, gen, test_state=state, test_type=wsi_type, save_path=save_path, mode=mode, labeled=labeled)
+                        self.flip_wsi(wsi, gen, test_state=state, test_type=wsi_type, model_wsi='multi', save_path=save_path, mode=mode, labeled=labeled)
                         train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", gen, "train", wsi, mode, state, wsi_type)
                     train_datasets.append(train_dataset)
                     valid_datasets.append(valid_dataset)
@@ -1566,9 +1573,9 @@ class Worker():
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
-                if self.pretrain:
-                    model_path = self.file_paths[f'{self.test_model}_model_path']
-                    model.load_state_dict(torch.load(model_path, weights_only=True))
+                # model_path = self.file_paths[f'{self.test_model}_model_path']
+                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+                model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
                 model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_{self.num_wsi}WTC.ckpt"
                 model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -1991,13 +1998,14 @@ class Worker():
         
         if self.gen_type:
             if save_path == None:
-                if model_wsi == 'one':
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+                if model_wsi == "one":
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
                 else:
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
             if gen == 0:
                 condition = f'{self.class_num}_class'
-                model_path = self.file_paths[f'{self.test_model}_model_path']
+                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+                # model_path = self.file_paths[f'{self.test_model}_model_path']
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
                 if model_wsi == 'one':
@@ -2267,10 +2275,10 @@ class Worker():
             _wsi = f"1{wsi:04d}"
 
         if save_path == None:
-            if model_wsi == 'one':
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+            if model_wsi == "one":
+                save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
             else:
-                save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+                save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
         if classes == None:
             classes = self.classes
 
@@ -2330,16 +2338,17 @@ class Worker():
             _wsi = wsi + 91
         elif test_type == "CC":
             _wsi = f"1{wsi:04d}"
-        
+
         if self.gen_type:
             if save_path == None:
-                if model_wsi == 'one':
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{_wsi}/trial_{self.num_trial}"
+                if model_wsi == "one":
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
                 else:
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
             if gen == 0:
                 condition = f'{self.class_num}_class'
-                model_path = self.file_paths[f'{self.test_model}_model_path']
+                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+                # model_path = self.file_paths[f'{self.test_model}_model_path']
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
                 if model_wsi == 'one':
@@ -2354,6 +2363,7 @@ class Worker():
 
             modelName = f"{condition}_Model.ckpt"
             model_path = f"{save_dir}/Model/{modelName}"
+
         if self.backbone == "ViT":
             model = self.ViTWithLinear(output_dim=self.class_num)
         elif self.backbone == "ViT_tiny":
@@ -2372,15 +2382,14 @@ class Worker():
         # Prepare Model
         model.load_state_dict(torch.load(model_path, weights_only = True))
         model.to(device)
-        Sigmoid = nn.Sigmoid()
 
         # Dataset, Evaluation, Inference
         if test_type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_all_patches_filter_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}', self.classes, self.test_tfm, state='new', label_exist=False)
         elif test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_all_patches_filter_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes, self.test_tfm, state='new', label_exist=False)
         
         _condition = f'{_wsi}_{condition}'
 
@@ -2455,10 +2464,10 @@ class Worker():
         __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
             if save_path == None:
-                if model_wsi == 'one':
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
+                if model_wsi == "one":
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{__wsi}/trial_{self.num_trial}'
                 else:
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
@@ -2593,10 +2602,10 @@ class Worker():
         __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
             if save_path == None:
-                if model_wsi == 'one':
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/{__wsi}/trial_{self.num_trial}"
+                if model_wsi == "one":
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
                 else:
-                    save_path = f"{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}"
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
             if gen == 0:
                 condition = f'{self.class_num}_class'
             else:
