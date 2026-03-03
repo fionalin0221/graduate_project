@@ -582,7 +582,7 @@ class Worker():
                 
                 if replay:
                     Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=data_num)
                     valid_dataset = []
                     test_dataset = []
                 else:
@@ -602,7 +602,7 @@ class Worker():
 
                 if replay:
                     Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num)
                     valid_dataset = []
                     test_dataset = []
                 else:
@@ -622,7 +622,7 @@ class Worker():
 
                 if replay:
                     Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num)
                     valid_dataset = []
                     test_dataset = []
                 else:
@@ -1471,7 +1471,79 @@ class Worker():
             self.test_all(wsi, gen-1, save_path, mode, test_state=test_state, test_type=test_type, model_wsi=model_wsi)
         self.build_pl_dataset(wsi, gen, save_path, mode, labeled, test_state=test_state, test_type=test_type)
 
-    def train_generation_one_WSI(self, wsi, mode="ideal", labeled = True):
+    def train_on_error_rate(self, wsi, mode="ideal", labeled = True, replay = False):
+        if self.test_state == "old":
+            _wsi = wsi
+        elif self.test_type == "HCC":
+            _wsi = wsi + 91
+        elif self.test_type == "CC":
+            _wsi = f"1{wsi:04d}"
+
+        # save_path = f'{self.save_dir}/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}/{_wsi}'
+        save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
+
+        os.makedirs(f"{save_path}/Model", exist_ok=True)
+        os.makedirs(f"{save_path}/Metric", exist_ok=True)
+        os.makedirs(f"{save_path}/Loss", exist_ok=True)
+        os.makedirs(f"{save_path}/TI", exist_ok=True)
+        os.makedirs(f"{save_path}/Data", exist_ok=True)
+
+        for error_rate in np.arange(0.01, 0.5, 0.01):
+            condition = f"ND_zscore_{mode}_patches_with_error_rate_{error_rate}"
+            print(condition)
+            train_datasets = []
+            valid_datasets = []
+
+            train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, error_rate=error_rate)
+            train_datasets.append(train_dataset)
+            valid_datasets.append(valid_dataset)
+
+            if replay:
+                replay_groups = [
+                    (self.replay_hcc_old_wsis, lambda w: w,        "old", "HCC"),
+                    (self.replay_hcc_wsis,     lambda w: w + 91,   "new", "HCC"),
+                    (self.replay_cc_wsis,      lambda w: f"1{w:04d}", "new", "CC"),
+                ]
+
+                for wsis, id_fn, state, wsi_type in replay_groups:
+                    for w in tqdm(wsis):
+                        _w = id_fn(w)
+                        # if self.load_dataset:
+            #                 train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_w}_{condition}", "train", w, state=state, wsi_type=wsi_type)
+            #             else:
+                        train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_w}_{condition}", None, "train", w, mode, state=state, wsi_type=wsi_type, replay=True)
+                        train_datasets.append(train_dataset)
+                        # valid_datasets.append(valid_dataset)
+            
+            combined_train = ConcatDataset(train_datasets)
+            combined_val = ConcatDataset(valid_datasets)
+            print(f"training data number: {len(combined_train)}, validation data number: {len(combined_val)}")
+
+            train_loader = DataLoader(combined_train, batch_size=self.batch_size, shuffle=True)
+            val_loader = DataLoader(combined_val, batch_size=self.batch_size, shuffle=False)
+        
+            # Model setting and transfer learning or not
+            if self.backbone == "ViT":
+                model = self.ViTWithLinear(output_dim=self.class_num)
+            elif self.backbone == "ViT_tiny":
+                model = self.ViTWithLinearTiny(output_dim=self.class_num)
+            elif self.backbone == "ViT_small":
+                model = self.ViTWithLinearSmall(output_dim=self.class_num)
+            else:
+                model = self.EfficientNetWithLinear(output_dim=self.class_num)
+
+            model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+            model.load_state_dict(torch.load(model_path, weights_only=True))
+
+            model.to(device)
+            modelName = f"{condition}_1WTC.ckpt"
+
+            criterion = nn.BCEWithLogitsLoss()
+            optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
+
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
+
+    def train_generation_one_WSI(self, wsi, mode="ideal", labeled = True, replay = False):
         if self.test_state == "old":
             _wsi = wsi
         elif self.test_type == "HCC":
@@ -1491,15 +1563,40 @@ class Worker():
         for gen in range(1, self.generation+1):
             condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
             print(condition)
+            train_datasets = []
+            valid_datasets = []
 
             if self.file_paths['error_rate'] > 0:
-                train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, state=state, wsi_type=wsi_type, error_rate=self.file_paths['error_rate'])
+                train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, error_rate=self.file_paths['error_rate'])
             else:
                 self.flip_wsi(wsi, gen, save_path, mode, labeled)        
                 train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
+            train_datasets.append(train_dataset)
+            valid_datasets.append(valid_dataset)
 
-            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
-            val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
+            if replay:
+                replay_groups = [
+                    (self.replay_hcc_old_wsis, lambda w: w,        "old", "HCC"),
+                    (self.replay_hcc_wsis,     lambda w: w + 91,   "new", "HCC"),
+                    (self.replay_cc_wsis,      lambda w: f"1{w:04d}", "new", "CC"),
+                ]
+
+                for wsis, id_fn, state, wsi_type in replay_groups:
+                    for wsi in tqdm(wsis):
+                        _wsi = id_fn(wsi)
+                        if self.load_dataset:
+                            train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
+                        else:
+                            train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, replay=True)
+                        train_datasets.append(train_dataset)
+                        # valid_datasets.append(valid_dataset)
+            
+            combined_train = ConcatDataset(train_datasets)
+            combined_val = ConcatDataset(valid_datasets)
+            print(f"training data number: {len(combined_train)}, validation data number: {len(combined_val)}")
+
+            train_loader = DataLoader(combined_train, batch_size=self.batch_size, shuffle=True)
+            val_loader = DataLoader(combined_val, batch_size=self.batch_size, shuffle=False)
         
             # Model setting and transfer learning or not
             if self.backbone == "ViT":
@@ -1553,7 +1650,7 @@ class Worker():
                     _wsi = id_fn(wsi)
                     if self.load_dataset:
                         train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
-                    elif self.file_paths['error_rate'] > 0::
+                    elif self.file_paths['error_rate'] > 0:
                         train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, error_rate=self.file_paths['error_rate'])
                     else:
                         self.flip_wsi(wsi, gen, test_state=state, test_type=wsi_type, model_wsi='multi', save_path=save_path, mode=mode, labeled=labeled)
