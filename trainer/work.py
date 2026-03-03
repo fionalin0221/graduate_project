@@ -245,7 +245,7 @@ class Worker():
                     return True
         return False
     
-    def split_datas(self, selected_data, data_num, base_path, tp_data=None, fp_data=None, valid_percentage=None, test_percentage=None):
+    def split_datas(self, selected_data, data_num, base_path, tp_data=None, fp_data=None, valid_percentage=None, test_percentage=None, error_rate=0):
         if valid_percentage is None:
             valid_percentage = self.valid_percentage
         if test_percentage is None:
@@ -411,7 +411,10 @@ class Worker():
         valid_test_percentage = valid_percentage + test_percentage
         for num in range(self.class_num):
             if len(datas[num]) > 0:
-                if valid_test_percentage < 1:
+                if valid_test_percentage == 0:
+                    train_ = datas[num]
+                    temp = []
+                elif valid_test_percentage < 1:
                     train_, temp = train_test_split(datas[num], test_size=valid_test_percentage, random_state=0)
                 else:
                     train_ = []
@@ -457,7 +460,7 @@ class Worker():
             test_labels += lb
             test_augments += aug
 
-        error_rate = self.file_paths['error_rate']  # Let 10% of data be wrong
+        # error_rate = self.file_paths['error_rate']  # Let 10% of data be wrong
 
         if error_rate > 0:
             n_samples = len(train_labels)
@@ -490,7 +493,7 @@ class Worker():
 
         return Train, Val, Test
 
-    def prepare_dataset(self, save_path, condition, gen, data_stage, wsi=None, mode=None, state=None, wsi_type=None, replay=False):
+    def prepare_dataset(self, save_path, condition, gen, data_stage, wsi=None, mode=None, state=None, wsi_type=None, replay=False, error_rate=0):
         train_data = []
         valid_data = []
         test_data = []
@@ -515,12 +518,12 @@ class Worker():
         else:
             data_num = self.data_num
 
-        print(f"Patches use for a WSI: {data_num}")
+        # print(f"Patches use for a WSI: {data_num}")
 
         if wsi == None:
             for h_wsi in self.hcc_old_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_2_v2.csv')
-                Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{h_wsi}')
+                Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{h_wsi}', error_rate=error_rate)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
@@ -535,7 +538,7 @@ class Worker():
 
             for h_wsi in self.hcc_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_2_v2.csv')
-                Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{h_wsi}')
+                Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{h_wsi}', error_rate=error_rate)
                 h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
@@ -550,7 +553,7 @@ class Worker():
 
             for c_wsi in self.cc_wsis:
                 selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_2_v2.csv')
-                Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{c_wsi}')
+                Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{c_wsi}', error_rate=error_rate)
                 c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
                 c_valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
                 c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
@@ -574,13 +577,19 @@ class Worker():
                     # tp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_{mode}_tp_patches_by_Gen{gen-1}.csv')
                     # fp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_{mode}_fp_patches_by_Gen{gen-1}.csv')
                     # Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}')
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}')
-                train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
-                valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
-                test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
+                
+                if replay:
+                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
+                    valid_dataset = []
+                    test_dataset = []
+                else:
+                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', error_rate=error_rate)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
+                    valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
+                    test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
             
             elif wsi_type == "HCC":
                 if gen_type:
@@ -588,13 +597,19 @@ class Worker():
                     # tp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_{mode}_tp_patches_by_Gen{gen-1}.csv')
                     # fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_{mode}_fp_patches_by_Gen{gen-1}.csv')
                     # Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}')
                 else:
                     selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}')
-                train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
-                valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
+
+                if replay:
+                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
+                    valid_dataset = []
+                    test_dataset = []
+                else:
+                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', error_rate=error_rate)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
+                    valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
             
             elif wsi_type == "CC":
                 if gen_type:
@@ -602,50 +617,54 @@ class Worker():
                     # tp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_{mode}_tp_patches_by_Gen{gen-1}.csv')
                     # fp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_{mode}_fp_patches_by_Gen{gen-1}.csv')
                     # Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}')
                 else:
                     selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}')
-                train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
-                valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
-                test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+
+                if replay:
+                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
+                    valid_dataset = []
+                    test_dataset = []
+                else:
+                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', error_rate=error_rate)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
+                    valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
+                    test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
+
             else:
                 if self.test_state == "old":
-                    if self.gen_type:
+                    if gen_type:
                         selected_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}.csv')
                         # tp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_{mode}_tp_patches_by_Gen{gen-1}.csv')
                         # fp_data = pd.read_csv(f'{save_path}/{wsi}_Gen{gen}_ND_zscore_{mode}_fp_patches_by_Gen{gen-1}.csv')
                         # Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
-                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{wsi}')
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_2_v2.csv')
-                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{wsi}')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{wsi}', error_rate=error_rate)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
                 elif self.test_type == "HCC":
-                    if self.gen_type:
+                    if gen_type:
                         selected_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}.csv')
                         # tp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_{mode}_tp_patches_by_Gen{gen-1}.csv')
                         # fp_data = pd.read_csv(f'{save_path}/{wsi+91}_Gen{gen}_ND_zscore_{mode}_fp_patches_by_Gen{gen-1}.csv')
                         # Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
-                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{wsi}')
                     else:
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_2_v2.csv')
-                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{wsi}')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{wsi}', error_rate=error_rate)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
                 else:
-                    if self.gen_type:
+                    if gen_type:
                         selected_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}.csv')
                         # tp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_{mode}_tp_patches_by_Gen{gen-1}.csv')
                         # fp_data = pd.read_csv(f'{save_path}/1{wsi:04d}_Gen{gen}_ND_zscore_{mode}_fp_patches_by_Gen{gen-1}.csv')
                         # Train, Valid, Test = self.split_datas(selected_data, self.data_num, tp_data=tp_data, fp_data=fp_data)
-                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{wsi}')
                     else:
                         selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2.csv')
-                        Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{wsi}')
+                    Train, Valid, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{wsi}', error_rate=error_rate)
                     train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
                     valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
@@ -1472,10 +1491,12 @@ class Worker():
         for gen in range(1, self.generation+1):
             condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
             print(condition)
-            self.flip_wsi(wsi, gen, save_path, mode, labeled)
-            
-            # Read TI.csv, prepare Dataframe
-            train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
+
+            if self.file_paths['error_rate'] > 0:
+                train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, state=state, wsi_type=wsi_type, error_rate=self.file_paths['error_rate'])
+            else:
+                self.flip_wsi(wsi, gen, save_path, mode, labeled)        
+                train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
 
             train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
             val_loader = DataLoader(valid_dataset, batch_size=self.batch_size, shuffle=False)
@@ -1528,10 +1549,12 @@ class Worker():
             ]
 
             for wsis, id_fn, state, wsi_type in groups:
-                for wsi in wsis:
+                for wsi in tqdm(wsis):
                     _wsi = id_fn(wsi)
                     if self.load_dataset:
                         train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
+                    elif self.file_paths['error_rate'] > 0::
+                        train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, error_rate=self.file_paths['error_rate'])
                     else:
                         self.flip_wsi(wsi, gen, test_state=state, test_type=wsi_type, model_wsi='multi', save_path=save_path, mode=mode, labeled=labeled)
                         train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", gen, "train", wsi, mode, state, wsi_type)
@@ -1546,14 +1569,14 @@ class Worker():
                 ]
 
                 for wsis, id_fn, state, wsi_type in replay_groups:
-                    for wsi in wsis:
+                    for wsi in tqdm(wsis):
                         _wsi = id_fn(wsi)
                         if self.load_dataset:
                             train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
                         else:
-                            train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, replay=True)
+                            train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, replay=True)
                         train_datasets.append(train_dataset)
-                        valid_datasets.append(valid_dataset)
+                        # valid_datasets.append(valid_dataset)
             
             combined_train = ConcatDataset(train_datasets)
             combined_val = ConcatDataset(valid_datasets)
@@ -1787,6 +1810,7 @@ class Worker():
             return
 
         pred_df = pd.read_csv(f"{save_path}/TI/{condition}_patch_in_region_filter_2_v2_TI.csv")
+        # pred_df = pd.read_csv(f"{save_path}/TI/{condition}_all_patches_filter_v2_TI.csv")
         all_labels, all_preds_labels = self.evaluation(data_info_df, pred_df, save_path, condition, classes, target_class)
         
         self.compute_metrics(all_labels, all_preds_labels, pred_df, save_path, condition, classes, target_class)
@@ -2296,6 +2320,7 @@ class Worker():
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         
         _condition = f'{_wsi}_{condition}_flip'
+        print(_condition)
         pred_df = pd.read_csv(f'{save_path}/Data/{_wsi}_{condition}.csv')
 
         results_df = {"file_name":[]}
