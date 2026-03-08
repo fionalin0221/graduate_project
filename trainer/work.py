@@ -1488,7 +1488,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        for error_rate in np.arange(0.01, 0.5, 0.01):
+        for error_rate in np.arange(0.01, 0.5, 0.05):
             condition = f"ND_zscore_{mode}_patches_with_error_rate_{error_rate}"
             print(condition)
             train_datasets = []
@@ -1582,12 +1582,12 @@ class Worker():
                 ]
 
                 for wsis, id_fn, state, wsi_type in replay_groups:
-                    for wsi in tqdm(wsis):
-                        _wsi = id_fn(wsi)
+                    for w in tqdm(wsis):
+                        _w = id_fn(w)
                         if self.load_dataset:
-                            train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
+                            train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_w}_{condition}", "train", w, state=state, wsi_type=wsi_type)
                         else:
-                            train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, replay=True)
+                            train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_w}_{condition}", None, "train", w, mode, state=state, wsi_type=wsi_type, replay=True)
                         train_datasets.append(train_dataset)
                         # valid_datasets.append(valid_dataset)
             
@@ -1666,12 +1666,12 @@ class Worker():
                 ]
 
                 for wsis, id_fn, state, wsi_type in replay_groups:
-                    for wsi in tqdm(wsis):
-                        _wsi = id_fn(wsi)
+                    for w in tqdm(wsis):
+                        _w = id_fn(w)
                         if self.load_dataset:
-                            train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_wsi}_{condition}", "train", wsi, state=state, wsi_type=wsi_type)
+                            train_dataset, valid_dataset, _ = self.load_datasets(f"{save_path}/Data", f"{_w}_{condition}", "train", w, state=state, wsi_type=wsi_type)
                         else:
-                            train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_wsi}_{condition}", None, "train", wsi, mode, state=state, wsi_type=wsi_type, replay=True)
+                            train_dataset, _, _, _ = self.prepare_dataset(f"{save_path}/Data", f"{_w}_{condition}", None, "train", w, mode, state=state, wsi_type=wsi_type, replay=True)
                         train_datasets.append(train_dataset)
                         # valid_datasets.append(valid_dataset)
             
@@ -1714,7 +1714,7 @@ class Worker():
             classes = self.classes
         
         if self.current_computer == "docker":
-            test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True, prefetch_factor=1)
+            test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=False)
         else:
             test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
@@ -2112,10 +2112,10 @@ class Worker():
             test_dataset = self.TestDataset(data_info_df, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.test_tfm, state='old', label_exist=False)
         elif test_type == "HCC":
             data_info_df = pd.read_csv(f'{self.hcc_csv_dir}/{_wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}',self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.hcc_data_dir}/{wsi}', self.classes, self.test_tfm, state='new', label_exist=False)
         elif test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
-            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes,self.test_tfm, state='new', label_exist=False)
+            test_dataset = self.TestDataset(data_info_df, f'{self.cc_data_dir}/{wsi}', self.classes, self.test_tfm, state='new', label_exist=False)
         
         if self.gen_type:
             if save_path == None:
@@ -2123,23 +2123,13 @@ class Worker():
                     save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
                 else:
                     save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
-            if gen == 0:
-                condition = f'{self.class_num}_class'
-                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
-                # model_path = self.file_paths[f'{self.test_model}_model_path']
-            else:
-                condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
-                if model_wsi == 'one':
-                    model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
-                else:
-                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
             
             os.makedirs(f"{save_path}/Model", exist_ok=True)
             os.makedirs(f"{save_path}/Metric", exist_ok=True)
             os.makedirs(f"{save_path}/Loss", exist_ok=True)
             os.makedirs(f"{save_path}/TI", exist_ok=True)
             os.makedirs(f"{save_path}/Data", exist_ok=True)
-            
+                        
             # Prepare Model
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=self.class_num)
@@ -2149,15 +2139,39 @@ class Worker():
                 model = self.ViTWithLinearSmall(output_dim=self.class_num)
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
-            model.load_state_dict(torch.load(model_path, weights_only = True))
-            model.to(device)
-            
-            _condition = f'{_wsi}_{condition}'
 
-            print(f"WSI {wsi} | {_condition}")
-            print(self.classes)
+            if self.test_model == 'self':
+                if gen == 0:
+                    condition = f'{self.class_num}_class'
+                    model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+                    # model_path = self.file_paths[f'{self.test_model}_model_path']
+                else:
+                    condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
+                
+                if model_wsi == 'one':
+                    model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
+                else:
+                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
+                model.load_state_dict(torch.load(model_path, weights_only = True))
+                model.to(device)
 
-            self._test(test_dataset, data_info_df, model, save_path, _condition)
+                _condition = f'{_wsi}_{condition}'
+
+                print(f"WSI {wsi} | {_condition}")
+                print(self.classes)
+
+                self._test(test_dataset, data_info_df, model, save_path, _condition)
+
+            elif self.test_model == 'error_rate':
+                for error_rate in np.arange(0.01, 0.5, 0.01):
+                    if error_rate < 0.25:
+                        continue
+                    condition = f"ND_zscore_{mode}_patches_with_error_rate_{error_rate}"
+                    print(f"WSI {wsi} | {condition}")
+                    model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
+                    model.load_state_dict(torch.load(model_path, weights_only = True))
+                    model.to(device)
+                    self._test(test_dataset, data_info_df, model, save_path, condition)
 
         else:
             condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
