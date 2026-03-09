@@ -1,32 +1,27 @@
 import os
 import pandas as pd
+import numpy as np
 
 # Define paths
 result_type = "Mix"
 base_model_num_wsi = 100
-base_model_data_num = 3200
-base_model_trial = 1
+base_model_data_num = "ALL"
+base_model_trial = 7
 
-num_wsi = 30
+num_wsi = 1
 data_num = 'ALL'
-num_trial = 2
-gen = 2
+num_trial = 3
+gen = 5
 num_class = 3
 error_train = False
 
-# base_dir = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
+base_dir = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 # base_dir = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
-base_dir = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
-if num_wsi == 1:
-    base_path = f'{base_dir}/LP_{data_num}/{_wsi}/trial_{num_trial}'
-else:
-    base_path = f'{base_dir}/{num_wsi}WTC_LP_{data_num}/trial_{num_trial}'
-
-output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_tani_generation_results.csv"
+# base_dir = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 
 # Define trials and WSIs
-# HCC_wsi_list = []
-# CC_wsi_list = []
+HCC_wsi_list = [195]
+CC_wsi_list = []
 
 # HCC 10WTC
 # HCC_wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
@@ -59,8 +54,8 @@ output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_tani_gen
 # CC_wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
 
 # large test set
-HCC_wsi_list = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
-CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+# HCC_wsi_list = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
+# CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
 
 # Generation Training
 # HCC_wsi_list = [104, 107, 109, 111, 120, 121, 122, 129, 131, 132, 135, 139, 141, 142, 145, 146, 149, 150, 153, 156, 159, 161, 162, 164, 165, 166, 168, 169, 171, 175]
@@ -85,20 +80,30 @@ def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
     return results
 
 def collect_results(wsi, cl, results):
+    if num_wsi == 1:
+        base_path = f'{base_dir}/LP_{data_num}/{wsi}/trial_{num_trial}'
+    else:
+        base_path = f'{base_dir}/{num_wsi}WTC_LP_{data_num}/trial_{num_trial}'
+
     if error_train:
-        for error_rate in np.arange(0.01, 0.5, 0.01):
+        for error_rate in np.arange(0.01, 0.5, 0.05):
             condition = f"ND_zscore_selected_patches_with_error_rate_{error_rate}"
             file_path = f"{base_path}/Metric/{condition}_test_result.csv"
             results = add_results(file_path, error_rate, cl, wsi, num_trial, "error_rate", results)
     else:
-        file_path = f"{base_path}/Metric/{wsi}_{num_class}_class_test_result.csv"
+        if num_wsi == 1:
+            file_path = f"{base_path}/Metric/{num_class}_class_test_result.csv"
+        else:
+            file_path = f"{base_path}/Metric/{wsi}_{num_class}_class_test_result.csv"
         results = add_results(file_path, 0, cl, wsi, num_trial, "inference", results)
         
         for g in range(1, gen+1):
             condition = f"Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}"
-            file_path = f"{base_path}/Metric/{wsi}_{condition}_flip_test_result.csv"
+            if num_wsi != 1:
+                condition = f"{wsi}_{condition}"
+            file_path = f"{base_path}/Metric/{condition}_flip_test_result.csv"
             results = add_results(file_path, g, cl, wsi, num_trial, "flip", results)
-            file_path = f"{base_path}/Metric/{wsi}_{condition}_test_result.csv"
+            file_path = f"{base_path}/Metric/{condition}_test_result.csv"
             results = add_results(file_path, g, cl, wsi, num_trial, "inference", results)
     
     return results
@@ -143,6 +148,12 @@ merged = pd.merge(
 
 # --- Final columns (remove Class) ---
 df_output = merged[['Trial', 'WSI', 'Gen', 'Condition', 'Accuracy', 'TP', 'FN', 'TN', 'FP']]
+
+if num_wsi == 1:
+    output_file = f'{base_dir}/LP_{data_num}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv'
+else:
+    output_file = f'{base_dir}/{num_wsi}WTC_LP_{data_num}/trial_{num_trial}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv'
+
 df_output.to_csv(output_file, index=False)
 
 print(f"Processed results saved to {output_file}")

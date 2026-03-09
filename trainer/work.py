@@ -1562,17 +1562,19 @@ class Worker():
 
         for gen in range(1, self.generation+1):
             condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
-            print(condition)
             train_datasets = []
             valid_datasets = []
 
-            if self.file_paths['error_rate'] > 0:
-                train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, error_rate=self.file_paths['error_rate'])
+            error_rate = self.file_paths['error_rate']
+            if error_rate > 0:
+                train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, error_rate=error_rate)
+                condition = f"{condition}_error_rate_{error_rate}"
             else:
-                self.flip_wsi(wsi, gen, save_path, mode, labeled)        
+                self.flip_wsi(wsi, gen, save_path = save_path, mode = mode, labeled = labeled)        
                 train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
             train_datasets.append(train_dataset)
             valid_datasets.append(valid_dataset)
+            print(condition)
 
             if replay:
                 replay_groups = [
@@ -2163,9 +2165,7 @@ class Worker():
                 self._test(test_dataset, data_info_df, model, save_path, _condition)
 
             elif self.test_model == 'error_rate':
-                for error_rate in np.arange(0.01, 0.5, 0.01):
-                    if error_rate < 0.25:
-                        continue
+                for error_rate in np.arange(0.01, 0.5, 0.05):
                     condition = f"ND_zscore_{mode}_patches_with_error_rate_{error_rate}"
                     print(f"WSI {wsi} | {condition}")
                     model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
@@ -2430,9 +2430,12 @@ class Worker():
         elif self.test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         
-        _condition = f'{_wsi}_{condition}_flip'
+        if model_wsi == "one":
+            _condition = f'{condition}_flip'
+        else:
+            _condition = f'{_wsi}_{condition}_flip'
         print(_condition)
-        pred_df = pd.read_csv(f'{save_path}/Data/{_wsi}_{condition}.csv')
+        pred_df = pd.read_csv(f'{save_path}/Data/{_condition}.csv')
 
         results_df = {"file_name":[]}
         all_labels, all_preds_labels = [], []
