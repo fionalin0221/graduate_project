@@ -12,38 +12,53 @@ def main():
     test_type = file_paths[f'test_type']
 
     # wsis = file_paths[f'HCC_old_wsis']
-    # wsis = file_paths[f'HCC_wsis']
-    wsis = file_paths[f'CC_wsis']
+    wsis = file_paths[f'HCC_wsis']
+    # wsis = file_paths[f'CC_wsis']
 
     worker = Worker(config)
     # worker.train()
     # worker.train_multi_model()
-    worker.train_generation(mode = 'selected', labeled = True,  replay = True)
-    # worker.test()
-    # worker.contour_analysis_multi()
-    # for wsi in wsis:
+    # worker.train_generation(labeled = False,  replay = True)
+
+    for wsi in wsis:
+        # One WSI Train / Test
         # worker.train_one_WSI(wsi)
-        # worker.test_one_WSI(wsi)
         # worker.test_TATI(wsi, 0)
         # worker.plot_TI_Result(wsi, 0)
-        # worker.train_generation_one_WSI(wsi, mode = 'selected', labeled=False)
-        # worker.test_all(wsi, config['generation'], mode = 'selected')
-        # for gen in range(config['generation']+1):
-        #     worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'pred', plot_heatmap = False, plot_boundary = True)
-        #     if gen != 0:
-        #         worker.test_flip(wsi, gen, mode = 'selected')
-        #         worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'flip', plot_boundary = True)
-        #     worker.test_TATI(wsi, gen, mode = 'selected')
-        #     worker.plot_TI_Result(wsi, gen, mode = 'selected')
 
-        # worker.test_all(wsi, config['generation'], mode = 'selected', model_wsi = 'multi')
-        # for gen in range(4, config['generation']+1):
-        #     worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'pred', model_wsi = 'multi', plot_heatmap = False, plot_boundary = True)
+        # Classification Test
+        # worker.test_TATI(wsi, 0, model_wsi= 'multi')
+        # worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
+
+        # Two Stage Test
+        # worker.test_TATI_two_stage(wsi, 0, model_wsi= 'multi')
+        # worker.test_all(wsi, 0)
+        # worker.plot_all_result(wsi, 0, plot_type = 'pred', plot_heatmap = False, plot_boundary = True)
+
+        # Error Rate Train / Test
+        # worker.train_on_error_rate(wsi, labeled=False, replay=False)
+        # worker.test_TATI(wsi, 0)
+
+        # Generation Training - 1WSI
+        worker.train_generation_one_WSI(wsi, labeled=False, replay=False)
+        worker.test_all(wsi, config['generation'])
+        for gen in range(config['generation']+1):
+            if gen != 0:
+                worker.test_flip(wsi, gen)
+                worker.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True)
+                worker.plot_all_result(wsi, gen, plot_type = 'pred', plot_heatmap = False, plot_boundary = True)
+            worker.test_TATI(wsi, gen)
+            worker.plot_TI_Result(wsi, gen)
+
+        # Generation Training - Multi WSI
+        # worker.test_all(wsi, config['generation'], model_wsi='multi')
+        # for gen in range(config['generation']+1):
         #     if gen != 0:
-        #         worker.test_flip(wsi, gen, mode = 'selected', model_wsi = 'multi')
-        #         worker.plot_all_result(wsi, gen, mode = 'selected', plot_type = 'flip', model_wsi = 'multi', plot_boundary = True)
-        #     worker.test_TATI(wsi, gen, mode = 'selected', model_wsi = 'multi')
-        #     worker.plot_TI_Result(wsi, gen, mode = 'selected', model_wsi = 'multi')
+        #         worker.test_flip(wsi, gen, model_wsi='multi')
+        #         worker.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True)
+        #         worker.plot_all_result(wsi, gen, plot_type = 'pred', plot_heatmap = False, plot_boundary = True)
+        #     worker.test_TATI(wsi, gen, model_wsi='multi')
+        #     worker.plot_TI_Result(wsi, gen, model_wsi='multi')
 
 
 if __name__ == "__main__":
