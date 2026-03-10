@@ -898,7 +898,7 @@ class Worker():
                                 selected_patches['file_name'].append(formatted_filename)
                                 selected_patches['label'].append(cl)
 
-        pd.DataFrame(selected_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}.csv", index=False)
+        pd.DataFrame(selected_patches).to_csv(f"{save_path}/Data/{_wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_flip.csv", index=False)
 
     class EfficientNetWithLinear(nn.Module):
         def __init__(self, output_dim, pretrain='efficientnet-b0'):
@@ -1488,7 +1488,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
 
-        for error_rate in np.arange(0.01, 0.5, 0.05):
+        for error_rate in [0.0, *np.arange(0.01, 1.0, 0.05), 1.0]:
             condition = f"ND_zscore_{mode}_patches_with_error_rate_{error_rate}"
             print(condition)
             train_datasets = []
@@ -1568,13 +1568,14 @@ class Worker():
             error_rate = self.file_paths['error_rate']
             if error_rate > 0:
                 train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, error_rate=error_rate)
-                condition = f"{condition}_error_rate_{error_rate}"
+                _condition = f"{_wsi}_{condition}_error_rate_{error_rate}"
             else:
                 self.flip_wsi(wsi, gen, save_path = save_path, mode = mode, labeled = labeled)        
                 train_dataset, valid_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
+                _condition = f"{_wsi}_{condition}"
             train_datasets.append(train_dataset)
             valid_datasets.append(valid_dataset)
-            print(condition)
+            print(_condition)
 
             if replay:
                 replay_groups = [
@@ -1618,13 +1619,13 @@ class Worker():
                 model.load_state_dict(torch.load(model_path, weights_only=True))
             
             model.to(device)
-            modelName = f"{condition}_1WTC.ckpt"
+            modelName = f"{_condition}_1WTC.ckpt"
 
             criterion = nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
             print(f"Generation {gen}")
-            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss")
+            self._train(model, modelName, criterion, optimizer, train_loader, val_loader, _condition, f"{save_path}/Model", f"{save_path}/Loss")
 
     def train_generation(self, mode="ideal", labeled = True, replay = False):
         save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
@@ -2149,11 +2150,10 @@ class Worker():
                     # model_path = self.file_paths[f'{self.test_model}_model_path']
                 else:
                     condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
-                
-                if model_wsi == 'one':
-                    model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
-                else:
-                    model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
+                    if model_wsi == 'one':
+                        model_path = f"{save_path}/Model/{_wsi}_{condition}_1WTC.ckpt"
+                    else:
+                        model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
                 model.load_state_dict(torch.load(model_path, weights_only = True))
                 model.to(device)
 
@@ -2165,7 +2165,7 @@ class Worker():
                 self._test(test_dataset, data_info_df, model, save_path, _condition)
 
             elif self.test_model == 'error_rate':
-                for error_rate in np.arange(0.01, 0.5, 0.05):
+                for error_rate in [0.0, *np.arange(0.01, 1.0, 0.05), 1.0]:
                     condition = f"ND_zscore_{mode}_patches_with_error_rate_{error_rate}"
                     print(f"WSI {wsi} | {condition}")
                     model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
@@ -2430,10 +2430,7 @@ class Worker():
         elif self.test_type == "CC":
             data_info_df = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/{_wsi}_patch_in_region_filter_2_v2.csv')
         
-        if model_wsi == "one":
-            _condition = f'{condition}_flip'
-        else:
-            _condition = f'{_wsi}_{condition}_flip'
+        _condition = f'{_wsi}_{condition}_flip'
         print(_condition)
         pred_df = pd.read_csv(f'{save_path}/Data/{_condition}.csv')
 
@@ -2491,7 +2488,7 @@ class Worker():
             else:
                 condition = f"Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
                 if model_wsi == 'one':
-                    model_path = f"{save_path}/Model/{condition}_1WTC.ckpt"
+                    model_path = f"{save_path}/Model/{_wsi}_{condition}_1WTC.ckpt"
                 else:
                     model_path = f"{save_path}/Model/{condition}_{self.num_wsi}WTC.ckpt"
 
@@ -2767,7 +2764,7 @@ class Worker():
         if gen == 0 or plot_type == 'pred':
             df = pd.read_csv(f"{save_path}/TI/{_condition}_all_patches_filter_v2_TI.csv")
         elif plot_type == 'flip':
-            df = pd.read_csv(f"{save_path}/Data/{_condition}.csv")
+            df = pd.read_csv(f"{save_path}/Data/{_condition}_flip.csv")
 
         all_patches = df['file_name'].to_list()
 
