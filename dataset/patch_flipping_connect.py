@@ -3,53 +3,74 @@ import cv2
 import pandas as pd
 
 def find_areas(img_pad):
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(img_pad.astype(np.uint8), connectivity=4)
-    return num_labels, labels, stats
+    num_labels, graph, stats, _ = cv2.connectedComponentsWithStats(img_pad.astype(np.uint8), connectivity=4)
+    return num_labels, graph, stats
 
-def flip_patch(img_pad, original_img_pad, classes, num_labels, labels, stats, area_thresh):
-    flip_pts = []
-    img_pad_filtered = img_pad.copy()
-    for comp_id in range(1, num_labels):  # skip background
-        x, y, w, h, area = stats[comp_id]
-        if area <= area_thresh:
-            # Add 1-pixel padding safely
-            y1 = max(0, y - 1)
-            y2 = min(img_pad.shape[0], y + h)
-            x1 = max(0, x - 1)
-            x2 = min(img_pad.shape[1], x + w)
+def flip_patch(components, components_graph, original_img_pad, area_thresh):
+    flip_pts_dict = {}
 
-            # Crop the padded bounding box
-            bbox = np.zeros((h+2, w+2), dtype=np.uint8)
-            ys, xs = np.where(labels == comp_id)
+    while components:
+        comp_id = min(components, key=lambda k: components[k][0])
+        area, original_cl, stats = components[comp_id]
+
+        if area > area_thresh:
+            break
+        
+        x, y, w, h, _ = stats
+
+        # Add 1-pixel padding safely
+        y1 = max(0, y - 1)
+        y2 = min(original_img_pad.shape[0], y + h + 1)
+        x1 = max(0, x - 1)
+        x2 = min(original_img_pad.shape[1], x + w + 1)
+
+        # Crop the padded bounding box
+        local_img = original_img_pad[y1:y2, x1:x2]
+        local_graph = components_graph[y1:y2, x1:x2]
+        bbox = (local_graph == comp_id).astype(np.uint8)
+
+        # Dilate to find the neighbors of bbox
+        kernel = np.ones((3,3), np.uint8)
+        dilated = cv2.dilate(bbox, kernel, iterations=1)
+        neighbor_mask = (dilated - bbox) == 1 # 2D bollean
+
+        neighbor_labels = local_img[neighbor_mask] # 1D array
+        neighbor_ids = local_graph[neighbor_mask] # 1D array
+
+        valid_mask = (neighbor_ids != 0) & (neighbor_ids != comp_id)
+        valid_neighbor_labels = neighbor_labels[valid_mask]
+        valid_neighbor_ids = neighbor_ids[valid_mask]
+
+        target_cl = None
+        target_comp_id = None
+
+        if len(valid_neighbor_labels) > 0:
+            unique_cls, counts_cls = np.unique(valid_neighbor_labels, return_counts=True)
+            target_cl = unique_cls[np.argmax(counts_cls)]
+
+            valid_comp_ids = valid_neighbor_ids[valid_neighbor_labels == target_cl]
+            unique_ids, counts_ids = np.unique(valid_comp_ids, return_counts=True)
+            target_comp_id = unique_ids[np.argmax(counts_ids)]
+
+        if target_comp_id is not None:
+            ys, xs = np.where(components_graph == comp_id)
             for _x, _y in zip(xs, ys):
-                bbox[_y - y1, _x - x1] = 1
+                flip_pts_dict[_x-1, _y-1] = int(target_cl)
 
-            kernel = np.ones((3,3), np.uint8)
-            dilated = cv2.dilate(bbox, kernel, iterations=1)
+                components_graph[_y, _x] = target_comp_id
+                original_img_pad[_y, _x] = target_cl
 
-            # outside boundary pixels only
-            outside = dilated - bbox
+            if target_comp_id in components:
+                target_ys, target_xs = np.where(components_graph == target_comp_id)
+                tx, ty, tw, th = np.min(target_xs), np.min(target_ys), np.max(target_xs)-np.min(target_xs)+1, np.max(target_ys)-np.min(target_ys)+1
 
-            # outside is your binary array: 1 = outside pixel, 0 = else
-            out_ys, out_xs = np.where(outside == 1)  # returns row indices (y) and column indices (x)
+                ta = components[target_comp_id][0] + area
+                components[target_comp_id][0] = ta
+                components[target_comp_id][2] = [tx, ty, tw, th, ta]
+        
+        components.pop(comp_id)
 
-            # convert bbox-relative coordinates to original image coordinates
-            orig_out_ys = out_ys + y1
-            orig_out_xs = out_xs + x1
-
-            # get the labels at those positions
-            labels_at_positions = original_img_pad[orig_out_ys, orig_out_xs]
-            # print(labels_at_positions)
-            counts = np.zeros(len(classes)+1)
-
-            for val in labels_at_positions:
-                counts[int(val)] += 1
-            cl = np.argmax(counts)
-
-            for _x, _y in zip(xs, ys):
-                flip_pts.append([_x-1, _y-1, cl])
-
-    return flip_pts
+    return [[pos[0], pos[1], cl] for pos, cl in flip_pts_dict.items()]
 
 
 if __name__ == '__main__':
