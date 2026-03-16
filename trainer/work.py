@@ -2660,6 +2660,7 @@ class Worker():
         # Save to CSV
         pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{condition}_flip_labels_predictions.csv", index=False)
         self.compute_metrics(all_labels, all_preds_labels, pred_df, save_path, condition, compute_roc=False, classes=classes)
+        self.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True)
 
     def test_all(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one', test_state=None, test_type=None):
         ### Multi-WTC Evaluation ###
@@ -2734,6 +2735,7 @@ class Worker():
         print(self.classes)
 
         self._test(test_dataset, data_info_df, model, save_path, _condition, labeled_data_info_df=labeled_data_info_df, labeled=False)
+        self.plot_all_result(wsi, gen, plot_type = 'pred', plot_boundary = True)
 
     def plot_confusion_matrix(self, cm, save_path, condition, all_classes, title='Confusion Matrix'):
         fig, ax = plt.subplots(figsize=(8, 6))
