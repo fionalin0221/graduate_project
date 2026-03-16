@@ -8,6 +8,7 @@ import glob
 import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
 
 from matplotlib.colors import ListedColormap
 from sklearn.metrics import accuracy_score, confusion_matrix
@@ -367,6 +368,101 @@ def threshold_classification_analysis():
             df_out = pd.DataFrame(rows, columns=["WSI", "file_name", "N_pred", "H_pred", "C_pred", "pred_label","true_label"])
             df_out.to_csv(f"{base_path}/invalid_case_{case_name}.csv", index=False)
 
+def plot_TI_Result_gt_boundary(self, wsi, gen, save_path=None):
+    _wsi = wsi+91 if (self.state == "new" and self.wsi_type == "HCC") else wsi
+    __wsi = wsi if self.state == "old" else (wsi+91 if self.wsi_type == "HCC" else f"1{wsi:04d}")
+    if self.gen_type:
+        if save_path == None:
+            save_path = f"{self.save_dir}/{self.num_wsi}WTC_Result/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}"
+        if gen == 0:
+            condition = f'{self.class_num}_class'
+        else:
+            condition = f"Gen{gen}_ND_zscore_ideal_patches_by_Gen{gen-1}"
+    else:
+        condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
+        if save_path == None:
+            save_path = f"{self.file_paths[f'{self.test_model}_model_path']}/LP_{self.data_num}/trial_{self.num_trial}/{_wsi}" 
+
+    df = pd.read_csv(f"{save_path}/Metric/{__wsi}_{condition}_labels_predictions.csv")
+    # df = pd.read_csv(f"{save_path}/TI/{_wsi}_{condition}_patch_in_region_filter_2_v2_TI.csv")
+    gt = pd.read_csv(f"{self.cc_csv_dir}/{wsi}/{__wsi}_patch_in_region_filter_2_v2.csv") if self.wsi_type == "CC" \
+        else pd.read_csv(f"{self.hcc_csv_dir}/{wsi}/{__wsi}_patch_in_region_filter_2_v2.csv")
+    
+    pred_patches = df['file_name'].to_list() #patches_in_hcc_hulls
+    gt_patches = gt['file_name'].to_list()
+
+    ### Get (x, y, pseudo-label) of every patch ###
+    pred_pts, gt_pts = [], []
+    for idx, img_name in enumerate(pred_patches):
+        if self.state == "old":
+            match = re.search(r'-(\d+)-(\d+)-\d{5}x\d{5}', img_name)
+            if match:
+                x = match.group(1)
+                y = match.group(2)
+            else:
+                print("Style Error")
+        else:
+            x, y = img_name[:-4].split('_')
+
+        pred_label  = self.classes.index(df['pred_label'][idx])  # N=0, H=1
+        # label = 1 if df['H_pred'][idx] > df["N_pred"][idx] else 0
+
+        x = (int(x)) // self.patch_size
+        y = (int(y)) // self.patch_size
+        
+        pred_pts.append([x, y, pred_label])
+
+    for idx, img_name in enumerate(gt_patches):
+        if self.state == "old":
+            match = re.search(r'-(\d+)-(\d+)-\d{5}x\d{5}', img_name)
+            if match:
+                x = match.group(1)
+                y = match.group(2)
+            else:
+                print("Style Error")
+        else:
+            x, y = img_name[:-4].split('_')
+
+        gt_label  = self.classes.index(gt['label'][idx])  # N=0, H=1
+        # label = 1 if df['H_pred'][idx] > df["N_pred"][idx] else 0
+
+        x = (int(x)) // self.patch_size
+        y = (int(y)) // self.patch_size
+        
+        gt_pts.append([x, y, gt_label])
+
+    pred_pts = np.array(pred_pts)
+    gt_pts = np.array(gt_pts)
+    
+    x_max = max(np.max(pred_pts[:, 0]), np.max(gt_pts[:, 0]))
+    y_max = max(np.max(pred_pts[:, 1]), np.max(gt_pts[:, 1]))
+
+    pred_labels = np.zeros((y_max + 1, x_max + 1), np.uint8)
+    gt_labels = np.zeros((y_max + 1, x_max + 1), np.uint8)
+
+    for x, y, label in pred_pts:
+        pred_labels[y, x] = label + 1
+
+    for x, y, label in gt_pts:
+        gt_labels[y, x] = label + 1
+
+    plt.imshow(pred_labels == 2, cmap=ListedColormap(['white', 'red']), interpolation='nearest', alpha=0.5)  # Pred - HCC
+    plt.imshow(pred_labels == 1, cmap=ListedColormap(['white', 'green']), interpolation='nearest', alpha=0.5)  # Pred - Normal
+    # plt.imshow(fib_patches_labels, cmap=ListedColormap(['white', 'blue']), interpolation='nearest', alpha=0.5)
+
+    gt_HCC_boundaries = find_boundaries(gt_labels == 2, mode='inner')  # HCC (red)
+    gt_Norm_boundaries = find_boundaries(gt_labels == 1, mode='inner')  # Normal (green)
+    plt.contour(gt_HCC_boundaries, colors='red', linewidths=1.2)
+    plt.contour(gt_Norm_boundaries, colors='green', linewidths=1.2)
+
+    _wsi = wsi+91 if (self.state == "new" and self.wsi_type == "HCC") else wsi
+    # plt.show()
+    plt.savefig(f"{save_path}/Metric/{wsi}_pred_vs_gt.png")
+    plt.tight_layout()
+    plt.axis("off")
+    plt.close()
+
+
 def rename():
     base_dir = "/home/ipmclab/project/Results/CC_NDPI/40WTC_Result/LP_3200/trial_4"  # change to your root directory
     old_str = "_trial_1_"
@@ -576,4 +672,60 @@ def sample_patches():
         sampled_df.to_csv(f"{base_path}/{wsi}/1{wsi:04d}_patch_in_region_filter_2_v2_sampled.csv", index=False)
         move_patches("CC", wsi, sampled_df)
 
-sample_patches()
+def images_to_gif():
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    font = ImageFont.truetype(font_path, 100)
+
+    wsi = 260
+    num_trial = 1
+    base_path = "/home/ipmclab/project/Results/Mix_NDPI/Generation_Training/100WTC_LP_ALL_trial_7_based/LP_ALL"
+    source_folder = f"{base_path}/{wsi}/trial_{num_trial}/Metric"
+    output_path = f"{base_path}/{wsi}/{wsi}_trial_{num_trial}_generations.gif"
+
+    images = []
+    # for thresh in np.arange(0, 100, 5):
+    max_gen = 3
+    img_path = f"{source_folder}/{wsi}_3_class_pred.png"
+    img = Image.open(img_path).convert("RGB")
+    
+    draw = ImageDraw.Draw(img)
+    text = f"Generation: 0 (inference)"
+    draw.text((50, 50), text, fill=(0, 0, 0), font=font)
+
+    images.append(img)
+
+    for gen in range(1, max_gen+1):
+        img_path = f"{source_folder}/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_flip.png"
+        if not os.path.exists(img_path):
+            continue
+        img = Image.open(img_path).convert("RGB")
+
+        
+        draw = ImageDraw.Draw(img)
+        text = f"Generation: {gen} (flip)"
+        draw.text((50, 50), text, fill=(0, 0, 0), font=font)
+
+        images.append(img)
+
+        img_path = f"{source_folder}/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_pred.png"
+        if not os.path.exists(img_path):
+            continue
+        img = Image.open(img_path).convert("RGB")
+        
+        draw = ImageDraw.Draw(img)
+        text = f"Generation: {gen} (inference)"
+        draw.text((50, 50), text, fill=(0, 0, 0), font=font)
+
+        images.append(img)
+
+    images[0].save(
+        output_path,
+        save_all=True,
+        append_images=images,
+        duration=1000,
+        loop=1,
+        optimize=True
+    )
+    print(f"Output GIF: {output_path}")
+
+images_to_gif()
