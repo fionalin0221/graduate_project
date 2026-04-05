@@ -2,17 +2,16 @@ import os
 import pandas as pd
 
 # Define paths
-# base_dir = "/workspace/Data/Results/HCC_NDPI/Data_Info"  # Change this to your directory containing CSV files
+base_dir = "/workspace/Data/Results"  # Change this to your directory containing CSV files
+# base_dir = "/home/ipmclab-2/project/Results"
 
-cl = "H"
+cl = "C"
 if cl == "H":
-    base_dir = "/workspace/Data/Results/HCC_NDPI/Data_Info"
-    # base_dir = "/home/ipmclab-2/project/Results/HCC_NDPI/Data_Info"
+    base_path = f"{base_dir}/HCC_NDPI/Data_Info"
     output_file = "40WTC_HCC_WSI_patches.csv"  # Output file
 elif cl == "C":
-    base_dir = "/workspace/Data/Results/CC_NDPI/Data_Info"
-    # base_dir = "/home/ipmclab-2/project/Results/CC_NDPI/Data_Info"
-    output_file = "40WTC_CC_WSI_patches.csv"  # Output file
+    base_path = f"{base_dir}/CC_NDPI/Data_Info"
+    output_file = "100WTC_CC_WSI_patches.csv"  # Output file
 
 # Store results
 results = []
@@ -22,15 +21,16 @@ results = []
 # wsis = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
 # wsis = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 175, 178, 191, 202]
 # wsis = [6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 37, 38, 39, 41, 42, 43, 44]
-wsis = [6, 8, 11, 12, 13, 14, 39, 52, 54, 55, 72, 108, 111, 116,  122, 124, 130, 131, 137, 138, 143, 144, 169, 170, 171, 175, 178, 180, 183, 184, 1, 7, 40, 53, 70, 100, 136, 143, 223, 246]
+# wsis = [6, 8, 11, 12, 13, 14, 39, 52, 54, 55, 72, 108, 111, 116,  122, 124, 130, 131, 137, 138, 143, 144, 169, 170, 171, 175, 178, 180, 183, 184, 1, 7, 40, 53, 70, 100, 136, 143, 223, 246]
+wsis = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71, 72, 88, 91, 95, 100, 108, 109, 110, 111, 118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 177, 178, 179, 180, 183, 184, 185, 189, 190, 191, 192, 201, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
 
 # Loop through directories
 for num in wsis:  # Adjust range if needed
-    dir_path = os.path.join(base_dir, str(num))  # Directory path
+    dir_path = os.path.join(base_path, str(num))  # Directory path
     if cl == "H":
-        file_name = f"{num}_patch_in_region_filter_2_v2.csv"
+        file_name = f"{num}_patch_in_region_filter_3_v2.csv"
     elif cl == "C":
-        file_name = f"1{num:04d}_patch_in_region_filter_2_v2.csv"
+        file_name = f"1{num:04d}_patch_in_region_filter_3_v2.csv"
     
     file_path = os.path.join(dir_path, file_name)
     print(file_path)
@@ -42,12 +42,13 @@ for num in wsis:  # Adjust range if needed
         # Count occurrences of "C" and "N"
         count_C = (df['label'] == cl).sum()
         count_N = (df['label'] == 'N').sum()
+        count_F = (df['label'] == 'F').sum()
 
         # Append results
-        results.append({"WSI": num, f"count_{cl}": count_C, "count_N": count_N})
+        results.append({"WSI": num, f"count_{cl}": count_C, "count_N": count_N, "count_F": count_F})
 
 # Save to CSV
 df_results = pd.DataFrame(results)
-df_results.to_csv(f"{base_dir}/{output_file}", index=False)
+df_results.to_csv(f"{base_path}/{output_file}", index=False)
 
 print(f"Label counts saved to {output_file}")

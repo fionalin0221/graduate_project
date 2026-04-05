@@ -10,6 +10,55 @@ import cv2
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import pandas as pd
+import numpy as np
+from shapely.geometry import Polygon as ShapePolygon
+from shapely.validation import make_valid
+
+def visualize_patches_on_wsi(cancer_type, csv_dir, csv_path, all_region, classes, patch_size=448):
+    df = pd.read_csv(csv_path)
+    
+    color_map = {classes[0]: 'green',}
+    color_map[classes[1]] = 'red' if cancer_type == "HCC" else 'blue'
+    if len(classes) > 2:
+        color_map[classes[2]] = 'yellow'
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+
+    for label, regions in all_region.items():
+        if label in classes:
+            for region in regions:
+                polygon = np.array(region)
+                ax.plot(polygon[:, 0], polygon[:, 1], color='black', linewidth=1, alpha=0.8)
+                poly_patch = patches.Polygon(polygon, closed=True, fill=True, 
+                                             color='gray', alpha=0.1)
+                ax.add_patch(poly_patch)
+
+    for _, row in df.iterrows():
+        f = row['file_name']
+        label = row['label']
+
+        fx, fy = f.replace('.tif', '').split('_')
+        x, y = int(fx), int(fy)
+
+        rect = patches.Rectangle((x, y), patch_size, patch_size, 
+                                 linewidth=0, 
+                                 edgecolor='none', 
+                                 facecolor=color_map.get(label, 'yellow'), 
+                                 alpha=0.5)
+        ax.add_patch(rect)
+
+    ax.set_aspect('equal')
+    ax.invert_yaxis() 
+    
+    plt.title(f"Patch Visualization - {len(df)} patches")
+    plt.legend([patches.Patch(color=color_map[c], alpha=0.5) for c in classes], classes)
+    
+    plt.savefig(f"{csv_dir}/visualization_WSI_{wsi}.png", dpi=300, bbox_inches='tight', facecolor='white')
+    # plt.show()
+
 def Ray_Segment(point, s_point, e_point):
     if s_point[1] == e_point[1]:
         return False
@@ -69,7 +118,7 @@ def check_patch_condition(image_path):
         return 1
     return 0
 
-def process_image(f, patches_path, all_region, classes):
+def process_image(f, patches_path, all_region, classes, threshold=0.5):
 
     if check_patch_condition(f"{patches_path}/{f}") == 1:
         return None
@@ -80,12 +129,36 @@ def process_image(f, patches_path, all_region, classes):
     right_up = [int(fx) + 448, int(fy)]
     left_down = [int(fx), int(fy) + 448]
     right_down = [int(fx) + 448, int(fy) + 448]
+    patch_coords = [left_up, right_up, right_down, left_down]
 
+    # Use corner to decide labeled or not
+    # for label_name, regions in all_region.items():
+    #     if label_name in classes:
+    #         for region in regions:
+    #             region = np.array(region)
+    #             inside_count = sum(Point_in_Region(pt, region) for pt in patch_coords)
+    #             # if all(Point_in_Region(pt, region) for pt in [left_up, right_up, left_down, right_down]):
+    #             if inside_count >= 2:
+    #                 return f, label_name
+
+    # Use area to decide labeled or not
+    patch_poly = ShapePolygon(patch_coords)
+    patch_area = patch_poly.area
     for label_name, regions in all_region.items():
         if label_name in classes:
             for region in regions:
-                region = np.array(region)
-                if all(Point_in_Region(pt, region) for pt in [left_up, right_up, left_down, right_down]):
+                if len(region) < 3:
+                    continue
+                region_poly = ShapePolygon(region)
+                if not region_poly.is_valid:
+                    region_poly = make_valid(region_poly)
+                    if region_poly.is_empty:
+                        continue
+
+                intersection_area = patch_poly.intersection(region_poly).area
+                overlap_ratio = intersection_area / patch_area
+                
+                if overlap_ratio > threshold:
                     return f, label_name
 
     return None
@@ -106,16 +179,18 @@ wsis = file_paths[f'{cancer_type}_wsis']
 for wsi in wsis:
     print(f'{cancer_type} WSI : ', wsi)
     if cancer_type == "HCC":
-        if len(classes) == 2:
-            xml_name = "LIVER_{:05d}.xml".format(wsi)
-        elif len(classes) == 3:
-            xml_name = "LIVER_{:05d}_3.xml".format(wsi)
+        xml_name = "LIVER_{:05d}.xml".format(wsi)
+        # if len(classes) == 2:
+        #     xml_name = "LIVER_{:05d}.xml".format(wsi)
+        # elif len(classes) == 3:
+        #     xml_name = "LIVER_{:05d}_3.xml".format(wsi)
         tree = ET.parse(os.path.join(file_paths[f'HCC_{state}_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
     elif cancer_type == "CC":
-        if len(classes) == 2:
-            xml_name = "LIVER_1{:04d}.xml".format(wsi)
-        elif len(classes) == 3:
-            xml_name = "LIVER_1{:04d}_3.xml".format(wsi)
+        xml_name = "LIVER_1{:04d}.xml".format(wsi)
+        # if len(classes) == 2:
+        #     xml_name = "LIVER_1{:04d}.xml".format(wsi)
+        # elif len(classes) == 3:
+        #     xml_name = "LIVER_1{:04d}_3.xml".format(wsi)
         tree = ET.parse(os.path.join(file_paths['CC_ndpi_path'], xml_name), parser=ET.XMLParser(encoding="utf-8"))
     print(xml_name)
     root = tree.getroot()
@@ -165,10 +240,13 @@ for wsi in wsis:
 
     df = pd.DataFrame(data_info)
     if cancer_type == "HCC":
-        df.to_csv(os.path.join(csv_dir, f'{wsi+91}_patch_in_region_filter_{len(classes)}_v2.csv'), index=False)
+        csv_path = os.path.join(csv_dir, f'{wsi+91}_patch_in_region_filter_{len(classes)}_v2.csv')
     elif cancer_type == "CC":
-        df.to_csv(os.path.join(csv_dir, f'1{wsi:04d}_patch_in_region_filter_{len(classes)}_v2.csv'), index=False)
+        csv_path = os.path.join(csv_dir, f'1{wsi:04d}_patch_in_region_filter_{len(classes)}_v2.csv')
+    df.to_csv(csv_path, index=False)
     if len(classes) == 2:
         print(nums[0], nums[1])
     elif len(classes) == 3:
         print(nums[0], nums[1], nums[2])
+    
+    visualize_patches_on_wsi(cancer_type, csv_dir, csv_path, all_region, classes)

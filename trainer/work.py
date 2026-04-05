@@ -284,20 +284,20 @@ class Worker():
             for num in range(self.class_num):
                 class_samples = class_file_names[num]
                 if len(class_samples) > 0:
-                    # datas.append([(name, False) for name in class_samples])
+                    datas.append([(name, False) for name in class_samples])
 
-                    # Compute how many samples are missing to reach the max size
-                    n_missing = max_len - len(class_samples)
-                    duplicated = []
+                    # # Compute how many samples are missing to reach the max size
+                    # n_missing = max_len - len(class_samples)
+                    # duplicated = []
 
-                    # Randomly duplicate existing samples (mark as should_augment=True)
-                    for _ in range(n_missing):
-                        chosen = random.choice(class_samples)
-                        duplicated.append((chosen, True))
+                    # # Randomly duplicate existing samples (mark as should_augment=True)
+                    # for _ in range(n_missing):
+                    #     chosen = random.choice(class_samples)
+                    #     duplicated.append((chosen, True))
 
-                    # Combine original samples (should_augment=False) and duplicated ones
-                    augmented_list = [(name, False) for name in class_samples] + duplicated
-                    datas.append(augmented_list)
+                    # # Combine original samples (should_augment=False) and duplicated ones
+                    # augmented_list = [(name, False) for name in class_samples] + duplicated
+                    # datas.append(augmented_list)
                 else:
                     datas.append([])
         else:
@@ -621,6 +621,7 @@ class Worker():
             train_dataset = ConcatDataset(train_datasets)
             valid_dataset = ConcatDataset(valid_datasets)
             test_dataset = ConcatDataset(test_datasets)
+            valid_gt_dataset = None
 
         else:
             if state == "old":
