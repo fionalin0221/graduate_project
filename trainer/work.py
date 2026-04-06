@@ -30,7 +30,9 @@ from torch_ema import ExponentialMovingAverage as ema
 from torch.amp import autocast, GradScaler
 import timm
 
+import colorsys
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from matplotlib.colors import ListedColormap
 
 torch.manual_seed(0)
@@ -2873,63 +2875,158 @@ class Worker():
         for x, y, label in all_pts:
             image[y, x] = label
 
-        if self.class_num == 3:
+        def get_hsl(h, s, l):
+            # return mcolors.to_hex(mcolors.hls_to_rgb(h/360, l/100, s/100))
+            r, g, b = colorsys.hls_to_rgb(h/360, l/100, s/100)
+            return mcolors.to_hex((r, g, b))
+
+        HUE = {
+            1: 140,  # Normal: green
+            2: 0,    # HCC: red
+            3: 210,  # CC: blue
+            4: 280   # Fib: purple
+        }
+        if self.class_num == 4:
+            # color_map = {
+            #     1: 'green',          # True Normal
+            #     2: 'red',            # True HCC
+            #     3: 'blue',           # True CC
+            #     12: 'lightgreen',    # Normal -> HCC
+            #     13: 'darkslategrey', # Normal -> CC
+            #     21: 'lightsalmon',   # HCC -> Normal
+            #     23: 'darkred',       # HCC -> CC
+            #     31: 'lightblue',     # CC -> Normal
+            #     32: 'indigo',        # CC -> HCC
+            #     -1: 'grey'           # No Prediction
+            # }
+
             color_map = {
-                1: 'green',          # True Normal
-                2: 'red',            # True HCC
-                3: 'blue',           # True CC
-                12: 'lightgreen',    # Normal -> HCC
-                13: 'darkslategrey', # Normal -> CC
-                21: 'lightsalmon',   # HCC -> Normal
-                23: 'darkred',       # HCC -> CC
-                31: 'lightblue',     # CC -> Normal
-                32: 'indigo',        # CC -> HCC
-                -1: 'grey'           # No Prediction
+                # --- 1: Normal (green) ---
+                1:  get_hsl(HUE[1], 80, 25), # True: pure green
+                12: get_hsl(HUE[1], 45, 75),  # Normal -> HCC (light pink green)
+                13: get_hsl(HUE[1], 55, 25),  # Normal -> CC (dark green)
+                14: get_hsl(HUE[1], 25, 55),  # Normal -> Fib (grey green)
+
+                # --- 2: HCC (red) ---
+                2:  get_hsl(HUE[2], 100, 50), # True: pure red
+                21: get_hsl(HUE[2], 45, 75),  # HCC -> Normal (pink)
+                23: get_hsl(HUE[2], 55, 25),  # HCC -> CC (dark red)
+                24: get_hsl(HUE[2], 25, 55),  # HCC -> Fib (grey red)
+
+                # --- 3: CC (blue) ---
+                3:  get_hsl(HUE[3], 100, 55), # True: pure blue
+                31: get_hsl(HUE[3], 45, 75),  # CC -> Normal (sky blue)
+                32: get_hsl(HUE[3], 55, 25),  # CC -> HCC (dark blue)
+                34: get_hsl(HUE[3], 25, 55),  # CC -> Fib (grey blue)
+
+                # --- 4: Fib (purple) ---
+                4:  get_hsl(HUE[4], 90, 50),  # True: pure purple
+                41: get_hsl(HUE[4], 45, 75),  # Fib -> Normal (light purple/lavender)
+                42: get_hsl(HUE[4], 55, 25),  # Fib -> HCC (dark purple)
+                43: get_hsl(HUE[4], 25, 55),  # Fib -> CC (grey purple)
+
+                -1: 'dimgrey'                    # No Prediction
             }
             legend_specs = [
                 (1,  'True Normal'),
                 (2,  'True HCC'),
                 (3,  'True CC'),
+                (4,  'True Fib'),
 
                 (12, 'Normal -> HCC'),
                 (13, 'Normal -> CC'),
+                (14, 'Normal -> Fib'),
 
                 (21, 'HCC -> Normal'),
                 (23, 'HCC -> CC'),
+                (24, 'HCC -> Fib'),
 
                 (31, 'CC -> Normal'),
                 (32, 'CC -> HCC'),
+                (34, 'CC -> Fib'),
+
+                (41, 'Fib -> Normal'),
+                (42, 'Fib -> HCC'),
+                (43, 'Fib -> CC'),
 
                 (-1, 'No Prediction'),
             ]
 
-        elif self.class_num == 2:
+        elif self.class_num == 3:
             if self.test_type == "HCC":
+                # color_map = {
+                #     1: 'green',         # True Normal
+                #     2: 'red',           # True HCC
+                #     12: 'lightgreen',   # Normal -> HCC
+                #     21: 'lightsalmon',  # HCC -> Normal
+                # }
                 color_map = {
-                    1: 'green',         # True Normal
-                    2: 'red',           # True HCC
-                    12: 'lightgreen',   # Normal -> HCC
-                    21: 'lightsalmon',  # HCC -> Normal
+                    # --- 1: Normal (green) ---
+                    1:  get_hsl(HUE[1], 80, 25), # True: pure green
+                    12: get_hsl(HUE[1], 45, 75),  # Normal -> HCC (light pink green)
+                    13: get_hsl(HUE[1], 25, 55),  # Normal -> Fib (grey green)
+
+                    # --- 2: HCC (red) ---
+                    2:  get_hsl(HUE[2], 100, 50), # True: pure red
+                    21: get_hsl(HUE[2], 45, 75),  # HCC -> Normal (pink)
+                    23: get_hsl(HUE[2], 25, 55),  # HCC -> Fib (grey red)
+
+                    # --- 3: Fib (purple) ---
+                    3:  get_hsl(HUE[4], 90, 50),  # True: pure purple
+                    31: get_hsl(HUE[4], 45, 75),  # Fib -> Normal (light purple/lavender)
+                    32: get_hsl(HUE[4], 55, 25),  # Fib -> HCC (dark purple)
+
+                    -1: 'dimgrey'                    # No Prediction
                 }
                 legend_specs = [
                     (1,  'True Normal'),
                     (2,  'True HCC'),
+                    (3,  'True Fib'),
                     (12, 'Normal -> HCC'),
+                    (13, 'Normal -> Fib'),
                     (21, 'HCC -> Normal'),
+                    (23, 'HCC -> Fib'),
+                    (31, 'Fib -> Normal'),
+                    (32, 'Fib -> HCC'),
+                    (-1, 'No Prediction'),
                 ]
 
             elif self.test_type == "CC":
+                # color_map = {
+                #     1: 'green',            # True Normal
+                #     2: 'blue',             # True CC
+                #     12: 'darkslategrey',   # Normal -> CC
+                #     21: 'lightblue',       # CC -> Normal
+                # }
                 color_map = {
-                    1: 'green',            # True Normal
-                    2: 'blue',             # True CC
-                    12: 'darkslategrey',   # Normal -> CC
-                    21: 'lightblue',       # CC -> Normal
+                    # --- 1: Normal (green) ---
+                    1:  get_hsl(HUE[1], 80, 25), # True: pure green
+                    12: get_hsl(HUE[1], 55, 25),  # Normal -> CC (dark green)
+                    13: get_hsl(HUE[1], 25, 55),  # Normal -> Fib (grey green)
+
+                    # --- 2: CC (blue) ---
+                    2:  get_hsl(HUE[3], 100, 55), # True: pure blue
+                    21: get_hsl(HUE[3], 45, 75),  # CC -> Normal (sky blue)
+                    23: get_hsl(HUE[3], 25, 55),  # CC -> Fib (grey blue)
+
+                    # --- 3: Fib (purple) ---
+                    3:  get_hsl(HUE[4], 90, 50),  # True: pure purple
+                    31: get_hsl(HUE[4], 45, 75),  # Fib -> Normal (light purple/lavender)
+                    32: get_hsl(HUE[4], 25, 55),  # Fib -> CC (grey purple)
+
+                    -1: 'dimgrey'                    # No Prediction
                 }
                 legend_specs = [
                     (1,  'True Normal'),
                     (2,  'True CC'),
+                    (3,  'True Fib'),
                     (12, 'Normal -> CC'),
+                    (13, 'Normal -> Fib'),
                     (21, 'CC -> Normal'),
+                    (23, 'CC -> Fib'),
+                    (31, 'Fib -> Normal'),
+                    (32, 'Fib -> CC'),
+                    (-1, 'No Prediction'),
                 ]
 
         legend_elements = [plt.Line2D([0], [0], color=color_map[k], lw=4, label=label) for k, label in legend_specs]
@@ -3042,44 +3139,76 @@ class Worker():
             gt_mask[y, x] = 1
 
         # --- Color map ---
-        if self.class_num == 3:
+        def get_hsl(h, s, l):
+            # return mcolors.to_hex(mcolors.hls_to_rgb(h/360, l/100, s/100))
+            r, g, b = colorsys.hls_to_rgb(h/360, l/100, s/100)
+            return mcolors.to_hex((r, g, b))
+
+        HUE = {
+            1: 140,  # Normal: green
+            2: 0,    # HCC: red
+            3: 210,  # CC: blue
+            4: 280   # Fib: purple
+        }
+        if self.class_num == 4:
+            # color_map = {
+            #     -1: 'grey',      # No Prediction
+            #     1: 'green',     # Pred Normal
+            #     2: 'red',       # Pred HCC
+            #     3: 'blue',      # Pred CC
+            # }
             color_map = {
-                -1: 'grey',      # No Prediction
-                1: 'green',     # Pred Normal
-                2: 'red',       # Pred HCC
-                3: 'blue',      # Pred CC
+                -1: 'dimgrey',                   # No Prediction
+                1:  get_hsl(HUE[1], 80, 25), # Pred Normal
+                2:  get_hsl(HUE[2], 100, 50), # Pred HCC
+                3:  get_hsl(HUE[3], 100, 55), # Pred CC
+                4:  get_hsl(HUE[4],  90, 50), # Pred Fib
             }
             legend_elements = [
-                plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
-                plt.Line2D([0], [0], color='red', lw=4, label='Pred HCC'),
-                plt.Line2D([0], [0], color='blue', lw=4, label='Pred CC'),
-                plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
+                plt.Line2D([0], [0], color=color_map[1], lw=4, label='Pred Normal'),
+                plt.Line2D([0], [0], color=color_map[2], lw=4, label='Pred HCC'),
+                plt.Line2D([0], [0], color=color_map[3], lw=4, label='Pred CC'),
+                plt.Line2D([0], [0], color=color_map[4], lw=4, label='Pred Fib'),
+                plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
             ]
-        elif self.class_num == 2:
+        elif self.class_num == 3:
             # if self.test_type == "HCC":
             if self.wsi_type == "HCC":
+                # color_map = {
+                #     -1: 'grey',      # No Prediction
+                #     1: 'green',     # Pred Normal
+                #     2: 'red',       # Pred HCC
+                # }
                 color_map = {
-                    -1: 'grey',      # No Prediction
-                    1: 'green',     # Pred Normal
-                    2: 'red',       # Pred HCC
-                    
+                    -1: 'dimgrey',                   # No Prediction
+                    1:  get_hsl(HUE[1], 80, 25), # Pred Normal
+                    2:  get_hsl(HUE[2], 100, 50), # Pred HCC
+                    3:  get_hsl(HUE[4],  90, 50), # Pred Fib
                 }
                 legend_elements = [
-                    plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
-                    plt.Line2D([0], [0], color='red', lw=4, label='Pred HCC'),
-                    plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
+                    plt.Line2D([0], [0], color=color_map[1], lw=4, label='Pred Normal'),
+                    plt.Line2D([0], [0], color=color_map[2], lw=4, label='Pred HCC'),
+                    plt.Line2D([0], [0], color=color_map[3], lw=4, label='Pred Fib'),
+                    plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
             # elif self.test_type == "CC":
             elif self.wsi_type == "CC":
+                # color_map = {
+                #     -1: 'grey',      # No Prediction
+                #     1: 'green',     # Pred Normal
+                #     2: 'blue',      # Pred CC
+                # }
                 color_map = {
-                    -1: 'grey',      # No Prediction
-                    1: 'green',     # Pred Normal
-                    2: 'blue',      # Pred CC
+                    -1: 'dimgrey',                   # No Prediction
+                    1:  get_hsl(HUE[1], 80, 25), # Pred Normal
+                    2:  get_hsl(HUE[3], 100, 55), # Pred CC
+                    3:  get_hsl(HUE[4],  90, 50), # Pred Fib
                 }
                 legend_elements = [
-                    plt.Line2D([0], [0], color='green', lw=4, label='Pred Normal'),
-                    plt.Line2D([0], [0], color='blue', lw=4, label='Pred CC'),
-                    plt.Line2D([0], [0], color='grey', lw=4, label='No Prediction'),
+                    plt.Line2D([0], [0], color=color_map[1], lw=4, label='Pred Normal'),
+                    plt.Line2D([0], [0], color=color_map[2], lw=4, label='Pred CC'),
+                    plt.Line2D([0], [0], color=color_map[3], lw=4, label='Pred Fib'),
+                    plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
         plt.figure(figsize=(x_max/10, y_max/10))
         for label_value, color in color_map.items():
