@@ -2,17 +2,17 @@ import os
 import pandas as pd
 
 # Define paths
-result_type = "CC"
-num_wsi = 100
+result_type = "HCC"
+num_wsi = 1
 data_num = "ALL"
-num_trial = 3
-num_class = 2
-ep = 9
+num_trial = 6
+num_class = 3
+ep = 0
 
 # base_path = f"/workspace/Data/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-# base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_tati_test_results.csv"
+base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
+# base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
+output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
 # if ep == 0:
 #     output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
 # else:
@@ -20,9 +20,10 @@ output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_tati_tes
 
 # Define trials and WSIs
 # HCC_wsi_list = []
-# CC_wsi_list = []
+CC_wsi_list = []
 
 # HCC 10WTC
+HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 44, 45]
 # HCC_wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
 # HCC_wsi_list = [6, 11, 39, 52, 144]
 
@@ -53,8 +54,13 @@ output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_tati_tes
 # CC_wsi_list = [2, 41, 69, 90, 110, 123, 134, 177, 190, 201]
 
 # large test set
-HCC_wsi_list = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
-CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+# HCC_wsi_list = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
+# CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+
+# Generation Training
+# HCC_wsi_list = [104, 107, 109, 111, 120, 121, 122, 129, 131, 132, 135, 139, 141, 142, 145, 146, 149, 150, 153, 156, 159, 161, 162, 164, 165, 166, 168, 169, 171, 175]
+HCC_wsi_list = [h+91 for h in HCC_wsi_list]
+# CC_wsi_list = [146, 158, 163, 164, 165, 315, 316, 331, 363, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 495, 497, 499]
 
 
 def add_results(file_path, cl, wsi, num_trial, results):
@@ -65,8 +71,8 @@ def add_results(file_path, cl, wsi, num_trial, results):
     # Read the CSV file
     df = pd.read_csv(file_path)
 
-    if {'Accuracy', f'{cl}_TP', f'{cl}_FN'}.issubset(df.columns):
-        row = df.iloc[0][['Accuracy', f'{cl}_TP', f'{cl}_FN']]
+    if {'Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN'}.issubset(df.columns):
+        row = df.iloc[0][['Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN']]
         results.append([num_trial, wsi, cl] + row.tolist())  # Add trial and WSI ID for reference
     else:
         print(f"Missing columns in {file_path}")
@@ -95,39 +101,44 @@ results = []
 for _wsi in HCC_wsi_list:
     wsi = _wsi
     results = collect_results(wsi, "H", results)
+    results = collect_results(wsi, "N", results)
+    results = collect_results(wsi, "F", results)
 
 for _wsi in CC_wsi_list:
     wsi = f"1{_wsi:04d}"
     results = collect_results(wsi, "C", results)
-
-for _wsi in HCC_wsi_list:
-    wsi = _wsi
     results = collect_results(wsi, "N", results)
-
-for _wsi in CC_wsi_list:
-    wsi = f"1{_wsi:04d}"
-    results = collect_results(wsi, "N", results)
+    results = collect_results(wsi, "F", results)
             
 # --- Convert to DataFrame ---
-df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Class', 'Accuracy', 'TP', 'FN'])
+df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Class', 'Accuracy', 'F1', 'TP', 'FN'])
 
 # --- Separate tumor (H/C) and normal (N) ---
 df_tumor = df[df['Class'].isin(['H', 'C'])].copy()
 df_normal = df[df['Class'] == 'N'].copy()
-
-# Rename N columns (TP→TN, FN→FP)
-df_normal = df_normal.rename(columns={'TP': 'TN', 'FN': 'FP'})
+df_fib = df[df['Class'] == 'F'].copy()
 
 # Merge on Trial, WSI, Gen, Condition
+df_tumor = df_tumor.rename(columns={'TP': 'T_TP', 'FN': 'T_FN'})
+
 merged = pd.merge(
     df_tumor,
-    df_normal[['Trial', 'WSI', 'TN', 'FP']],
+    df_normal[['Trial', 'WSI', 'TP', 'FN']],
     on=['Trial', 'WSI'],
     how='left'
 )
+merged = merged.rename(columns={'TP': 'N_TP', 'FN': 'N_FN'})
+
+merged = pd.merge(
+    merged,
+    df_fib[['Trial', 'WSI', 'TP', 'FN']],
+    on=['Trial', 'WSI'],
+    how='left'
+)
+merged = merged.rename(columns={'TP': 'F_TP', 'FN': 'F_FN'})
 
 # --- Final columns (remove Class) ---
-df_output = merged[['Trial', 'WSI', 'Accuracy', 'TP', 'FN', 'TN', 'FP']]
+df_output = merged[['Trial', 'WSI', 'Accuracy', 'F1', 'T_TP', 'T_FN', 'N_TP', 'N_FN', 'F_TP', 'F_FN']]
 df_output.to_csv(output_file, index=False)
 
 print(f"Processed results saved to {output_file}")
