@@ -74,6 +74,7 @@ class Worker():
         self.replay_data_num = self.file_paths['replay_data_num']
         self.other_validation = self.file_paths['other_validation']
         self.other_valid_size = self.file_paths['valid_size']
+        self.sampling_weights = self.file_paths['sampling_weights']
 
         # Test parameters
         self.test_state = self.file_paths['test_state']
@@ -136,7 +137,7 @@ class Worker():
         ])
     
     class TrainDataset(Dataset):
-        def __init__(self, data_dict, img_dir, classes, transform, state, data_len):
+        def __init__(self, data_dict, img_dir, classes, transform, state, data_len, class_weights=None):
             self.data_dict = data_dict
             self.img_dir = img_dir
             self.classes = classes
@@ -144,11 +145,27 @@ class Worker():
             self.state = state
             self.data_len = data_len
 
+            self.class_indices = {cls: [] for cls in classes}
+            for i, label_text in enumerate(self.data_dict["label"]):
+                if label_text in self.class_indices:
+                    self.class_indices[label_text].append(i)
+            self.active_classes = [c for c in classes if len(self.class_indices[c]) > 0]
+
+            if class_weights is None:
+                self.sampling_weights = [1.0 / len(self.active_classes)] * len(self.active_classes)
+            else:
+                weights = [class_weights.get(c, 0.0) for c in self.active_classes]
+                total_w = sum(weights)
+                self.sampling_weights = [w / total_w for w in weights]
+
             # mask = data_dict["label"] != 'N'
             # self.data_dict = data_dict[mask].reset_index(drop=True)
 
         def __getitem__(self, id):
-            index = random.randint(0, len(self.data_dict["file_name"]) - 1)
+            # target_class = random.choice(self.active_classes)
+            target_class = random.choices(self.active_classes, weights=self.sampling_weights, k=1)[0]
+            index = random.choice(self.class_indices[target_class])
+            # index = random.randint(0, len(self.data_dict["file_name"]) - 1)
 
             label_text = self.data_dict["label"][index]
             label = self.classes.index(label_text)
@@ -578,7 +595,7 @@ class Worker():
             for h_wsi in self.hcc_old_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi}/{h_wsi}_patch_in_region_filter_{num}_v2.csv')
                 Train, Valid, _, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{h_wsi}', error_rate=error_rate)
-                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
+                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len, class_weights=self.sampling_weights)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "old")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
 
@@ -593,7 +610,7 @@ class Worker():
             for h_wsi in self.hcc_wsis:
                 selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{h_wsi+91}/{h_wsi+91}_patch_in_region_filter_{num}_v2.csv')
                 Train, Valid, _, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{h_wsi}', error_rate=error_rate)
-                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
+                h_train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len, class_weights=self.sampling_weights)
                 h_valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{h_wsi}', self.classes, self.train_tfm, state = "new")
                 h_test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{h_wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
 
@@ -608,7 +625,7 @@ class Worker():
             for c_wsi in self.cc_wsis:
                 selected_data = pd.read_csv(f'{self.cc_csv_dir}/{c_wsi}/1{c_wsi:04d}_patch_in_region_filter_{num}_v2.csv')
                 Train, Valid, _, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{c_wsi}', error_rate=error_rate)
-                c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
+                c_train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len, class_weights=self.sampling_weights)
                 c_valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{c_wsi}', self.classes, self.train_tfm, state = "new")
                 c_test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{c_wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
 
@@ -639,12 +656,12 @@ class Worker():
                 
                 if replay:
                     Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=data_num)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=data_num, class_weights=self.sampling_weights)
                     valid_dataset = []
                     test_dataset = []
                 else:
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len, class_weights=self.sampling_weights)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     valid_gt_dataset = self.ValidDataset(Valid_gt, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
@@ -662,12 +679,12 @@ class Worker():
 
                 if replay:
                     Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num, class_weights=self.sampling_weights)
                     valid_dataset = []
                     test_dataset = []
                 else:
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len, class_weights=self.sampling_weights)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_gt_dataset = self.ValidDataset(Valid_gt, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
@@ -685,12 +702,12 @@ class Worker():
 
                 if replay:
                     Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num, class_weights=self.sampling_weights)
                     valid_dataset = []
                     test_dataset = []
                 else:
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len, class_weights=self.sampling_weights)
                     valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_gt_dataset = self.ValidDataset(Valid_gt, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
@@ -707,7 +724,7 @@ class Worker():
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi}/{wsi}_patch_in_region_filter_{num}_v2.csv')
                         gt_data = None
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_old_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=self.hcc_data_len, class_weights=self.sampling_weights)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     valid_gt_dataset = self.ValidDataset(Valid_gt, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_old_data_dir}/{wsi}',self.classes, self.test_tfm, state = "old", label_exist=False)
@@ -722,7 +739,7 @@ class Worker():
                         selected_data = pd.read_csv(f'{self.hcc_csv_dir}/{wsi+91}/{wsi+91}_patch_in_region_filter_{num}_v2.csv')
                         gt_data = None
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, self.data_num, f'{self.hcc_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.hcc_data_len, class_weights=self.sampling_weights)
                     valid_dataset = self.ValidDataset(Valid, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_gt_dataset = self.ValidDataset(Valid_gt, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.hcc_data_dir}/{wsi}',self.classes, self.test_tfm, state = "new", label_exist=False)
@@ -737,7 +754,7 @@ class Worker():
                         selected_data = pd.read_csv(f'{self.cc_csv_dir}/{wsi}/1{wsi:04d}_patch_in_region_filter_{num}_v2.csv')
                         gt_data = None
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, self.data_num, f'{self.cc_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
-                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len)
+                    train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=self.cc_data_len, class_weights=self.sampling_weights)
                     valid_dataset = self.ValidDataset(Valid, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     valid_gt_dataset = self.ValidDataset(Valid_gt, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new")
                     test_dataset  = self.TestDataset(Test, f'{self.cc_data_dir}/{wsi}',self.classes, self.train_tfm, state = "new", label_exist=False)
