@@ -58,6 +58,9 @@ class Worker():
         # Model parameters
         self.backbone = self.file_paths['backbone']
         self.pretrain = self.file_paths['pretrain']
+        self.pretrain_model_trial = self.file_paths['pretrain_model_trial']
+        self.pretrain_model_data_num = self.file_paths['pretrain_model_data_num']
+        self.pretrain_model_num_wsi = self.file_paths['pretrain_model_num_wsi']
         self.batch_size = self.file_paths['batch_size']
         self.base_lr = float(self.file_paths['base_lr'])
         self.loss = self.file_paths['loss']
@@ -1563,8 +1566,9 @@ class Worker():
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
-            pretrain_model_path = self.file_paths[f'{self.test_model}_model_path']
-            model.load_state_dict(torch.load(pretrain_model_path, weights_only=True))
+            pretrain_model_condition = f"{self.pretrain_model_num_wsi}WTC_LP{self.pretrain_model_data_num}_{self.class_num}_class_trial_{self.pretrain_model_trial}"
+            pretrain_model_path = f"{self.save_path}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_Model.ckpt"
+            model.load_state_dict(torch.load(pretrain_model_path))
 
         optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
         model.to(device)
@@ -1613,7 +1617,9 @@ class Worker():
         else:
             model = self.EfficientNetWithLinear(output_dim=self.class_num)
         if self.pretrain:
-            model.load_state_dict(torch.load(model_path))
+            pretrain_model_condition = f"{self.pretrain_model_num_wsi}WTC_LP{self.pretrain_model_data_num}_{self.class_num}_class_trial_{self.pretrain_model_trial}"
+            pretrain_model_path = f"{self.save_path}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_Model.ckpt"
+            model.load_state_dict(torch.load(pretrain_model_path))
         model.to(device)
         
         if self.loss == 'binary_cross_entropy':
@@ -1648,6 +1654,7 @@ class Worker():
         criterion = nn.BCEWithLogitsLoss()
         
         for c in self.classes:
+            modelName = f"{condition}_{c}_Model.ckpt"
             if self.backbone == "ViT":
                 model = self.ViTWithLinear(output_dim=1)
             elif self.backbone == "ViT_tiny":
@@ -1656,8 +1663,11 @@ class Worker():
                 model = self.ViTWithLinearSmall(output_dim=1)
             else:
                 model = self.EfficientNetWithLinear(output_dim=1)
+            if self.pretrain:
+                pretrain_model_condition = f"{self.pretrain_model_num_wsi}WTC_LP{self.pretrain_model_data_num}_{self.class_num}_class_trial_{self.pretrain_model_trial}"
+                pretrain_model_path = f"{self.save_path}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_{c}_Model.ckpt"
+                model.load_state_dict(torch.load(pretrain_model_path))
             model.to(device)
-            modelName = f"{condition}_{c}_Model.ckpt"
             optimizer = torch.optim.Adam(model.parameters(), lr=self.base_lr)
 
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, condition, f"{save_path}/Model", f"{save_path}/Loss", target_class=self.classes.index(c))
@@ -1744,8 +1754,14 @@ class Worker():
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
 
-            model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
-            model.load_state_dict(torch.load(model_path, weights_only=True))
+            if self.pretrain:
+                pretrain_model_condition = f"{self.pretrain_model_num_wsi}WTC_LP{self.pretrain_model_data_num}_{self.class_num}_class_trial_{self.pretrain_model_trial}"
+                pretrain_model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.pretrain_model_num_wsi}WTC_Result/LP_{self.pretrain_model_data_num}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_Model.ckpt')
+                model.load_state_dict(torch.load(pretrain_model_path))
+            else:
+                model_condition = f'{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}'
+                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{model_condition}_Model.ckpt')
+                model.load_state_dict(torch.load(model_path, weights_only=True))
 
             model.to(device)
             modelName = f"{condition}_1WTC.ckpt"
@@ -1763,7 +1779,8 @@ class Worker():
         elif self.test_type == "CC":
             _wsi = f"1{wsi:04d}"
 
-        save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
+        save_dir = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}'
+        save_path = f'{save_dir}/trial_{self.num_trial}'
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1827,12 +1844,21 @@ class Worker():
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
-                # model_path = self.file_paths[f'{self.test_model}_model_path']
-                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
-                model.load_state_dict(torch.load(model_path, weights_only=True))
+                if self.pretrain:
+                    pretrain_model_condition = f"{_wsi}_Gen1_ND_zscore_{mode}_patches_by_Gen0"
+                    pretrain_model_path = f"{save_dir}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_1WTC.ckpt"
+                    model.load_state_dict(torch.load(pretrain_model_path))
+                else:
+                    model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+                    model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
-                model_path = f"{save_path}/Model/{_wsi}_Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_1WTC.ckpt"
-                model.load_state_dict(torch.load(model_path, weights_only=True))
+                if self.pretrain:
+                    pretrain_model_condition = f"{_wsi}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
+                    pretrain_model_path = f"{save_dir}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_1WTC.ckpt"
+                    model.load_state_dict(torch.load(pretrain_model_path))
+                else:
+                    model_path = f"{save_path}/Model/{_wsi}_Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_1WTC.ckpt"
+                    model.load_state_dict(torch.load(model_path, weights_only=True))
             
             model.to(device)
             modelName = f"{_condition}_1WTC.ckpt"
@@ -1844,7 +1870,8 @@ class Worker():
             self._train(model, modelName, criterion, optimizer, train_loader, val_loader, _condition, f"{save_path}/Model", f"{save_path}/Loss", valid_gt_loader=val_gt_loader)
 
     def train_generation(self, mode = "selected", labeled = True, replay = False):
-        save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
+        save_dir = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}'
+        save_path = f'{save_dir}/trial_{self.num_trial}'
 
         os.makedirs(f"{save_path}/Model", exist_ok=True)
         os.makedirs(f"{save_path}/Metric", exist_ok=True)
@@ -1912,10 +1939,20 @@ class Worker():
             else:
                 model = self.EfficientNetWithLinear(output_dim=self.class_num)
             if gen == 1:
-                model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
-                model.load_state_dict(torch.load(model_path, weights_only=True))
+                if self.pretrain:
+                    pretrain_model_condition = f"{_wsi}_Gen1_ND_zscore_{mode}_patches_by_Gen0"
+                    pretrain_model_path = f"{save_dir}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_1WTC.ckpt"
+                    model.load_state_dict(torch.load(pretrain_model_path))
+                else:
+                    model_path = os.path.join(self.file_paths[f'{self.wsi_type}_WTC_result_save_path'], f'{self.base_model_num_wsi}WTC_Result/LP_{self.base_model_data_num}/trial_{self.base_model_trial}/Model/{self.base_model_num_wsi}WTC_LP{self.base_model_data_num}_{self.class_num}_class_trial_{self.base_model_trial}_Model.ckpt')
+                    model.load_state_dict(torch.load(model_path, weights_only=True))
             else:
-                model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_{self.num_wsi}WTC.ckpt"
+                if self.pretrain:
+                    pretrain_model_condition = f"{_wsi}_Gen{gen}_ND_zscore_{mode}_patches_by_Gen{gen-1}"
+                    pretrain_model_path = f"{save_dir}/trial_{self.pretrain_model_trial}/Model/{pretrain_model_condition}_1WTC.ckpt"
+                    model.load_state_dict(torch.load(pretrain_model_path))
+                else:
+                    model_path = f"{save_path}/Model/Gen{gen-1}_ND_zscore_{mode}_patches_by_Gen{gen-2}_{self.num_wsi}WTC.ckpt"
                 model.load_state_dict(torch.load(model_path, weights_only=True))
             
             model.to(device)
@@ -2919,7 +2956,7 @@ class Worker():
 
             color_map = {
                 # --- 1: Normal (green) ---
-                1:  get_hsl(HUE[1], 80, 25), # True: pure green
+                1:  get_hsl(HUE[1], 80, 25),  # True: pure green
                 12: get_hsl(HUE[1], 45, 75),  # Normal -> HCC (light pink green)
                 13: get_hsl(HUE[1], 55, 25),  # Normal -> CC (dark green)
                 14: get_hsl(HUE[1], 25, 55),  # Normal -> Fib (grey green)
@@ -2942,7 +2979,7 @@ class Worker():
                 42: get_hsl(HUE[4], 55, 25),  # Fib -> HCC (dark purple)
                 43: get_hsl(HUE[4], 25, 55),  # Fib -> CC (grey purple)
 
-                -1: 'dimgrey'                    # No Prediction
+                -1: 'dimgrey'                 # No Prediction
             }
             legend_specs = [
                 (1,  'True Normal'),
@@ -2971,15 +3008,9 @@ class Worker():
 
         elif self.class_num == 3:
             if self.test_type == "HCC":
-                # color_map = {
-                #     1: 'green',         # True Normal
-                #     2: 'red',           # True HCC
-                #     12: 'lightgreen',   # Normal -> HCC
-                #     21: 'lightsalmon',  # HCC -> Normal
-                # }
                 color_map = {
                     # --- 1: Normal (green) ---
-                    1:  get_hsl(HUE[1], 80, 25), # True: pure green
+                    1:  get_hsl(HUE[1], 80, 25),  # True: pure green
                     12: get_hsl(HUE[1], 45, 75),  # Normal -> HCC (light pink green)
                     13: get_hsl(HUE[1], 25, 55),  # Normal -> Fib (grey green)
 
@@ -2993,7 +3024,7 @@ class Worker():
                     31: get_hsl(HUE[4], 45, 75),  # Fib -> Normal (light purple/lavender)
                     32: get_hsl(HUE[4], 55, 25),  # Fib -> HCC (dark purple)
 
-                    -1: 'dimgrey'                    # No Prediction
+                    -1: 'dimgrey'                 # No Prediction
                 }
                 legend_specs = [
                     (1,  'True Normal'),
@@ -3009,15 +3040,9 @@ class Worker():
                 ]
 
             elif self.test_type == "CC":
-                # color_map = {
-                #     1: 'green',            # True Normal
-                #     2: 'blue',             # True CC
-                #     12: 'darkslategrey',   # Normal -> CC
-                #     21: 'lightblue',       # CC -> Normal
-                # }
                 color_map = {
                     # --- 1: Normal (green) ---
-                    1:  get_hsl(HUE[1], 80, 25), # True: pure green
+                    1:  get_hsl(HUE[1], 80, 25),  # True: pure green
                     12: get_hsl(HUE[1], 55, 25),  # Normal -> CC (dark green)
                     13: get_hsl(HUE[1], 25, 55),  # Normal -> Fib (grey green)
 
@@ -3031,7 +3056,7 @@ class Worker():
                     31: get_hsl(HUE[4], 45, 75),  # Fib -> Normal (light purple/lavender)
                     32: get_hsl(HUE[4], 25, 55),  # Fib -> CC (grey purple)
 
-                    -1: 'dimgrey'                    # No Prediction
+                    -1: 'dimgrey'                 # No Prediction
                 }
                 legend_specs = [
                     (1,  'True Normal'),
@@ -3043,6 +3068,37 @@ class Worker():
                     (23, 'CC -> Fib'),
                     (31, 'Fib -> Normal'),
                     (32, 'Fib -> CC'),
+                    (-1, 'No Prediction'),
+                ]
+        elif self.class_num == 2:
+            if self.test_type == "HCC":
+                color_map = {
+                    1: 'green',         # True Normal
+                    2: 'red',           # True HCC
+                    12: 'lightgreen',   # Normal -> HCC
+                    21: 'lightsalmon',  # HCC -> Normal
+                    -1: 'dimgrey'
+                }
+                legend_specs = [
+                    (1,  'True Normal'),
+                    (2,  'True HCC'),
+                    (12, 'Normal -> HCC'),
+                    (21, 'HCC -> Normal'),
+                    (-1, 'No Prediction'),
+                ]
+            elif self.test_type == "CC":
+                color_map = {
+                    1: 'green',            # True Normal
+                    2: 'blue',             # True CC
+                    12: 'darkslategrey',   # Normal -> CC
+                    21: 'lightblue',       # CC -> Normal
+                    -1: 'dimgrey'
+                }
+                legend_specs = [
+                    (1,  'True Normal'),
+                    (2,  'True CC'),
+                    (12, 'Normal -> CC'),
+                    (21, 'CC -> Normal'),
                     (-1, 'No Prediction'),
                 ]
 
@@ -3121,7 +3177,6 @@ class Worker():
             for idx, img_name in enumerate(all_patches):
                 x, y = img_name[:-4].split('_')
                 row = df.iloc[idx][pred_cols].values
-                # pred_label = int(np.argmax(row))   # 0=N, 1=H, 2=C
                 over_threshold = [i for i, p in enumerate(row) if p > 0.5]
 
                 if len(over_threshold) == 1:
@@ -3157,7 +3212,6 @@ class Worker():
 
         # --- Color map ---
         def get_hsl(h, s, l):
-            # return mcolors.to_hex(mcolors.hls_to_rgb(h/360, l/100, s/100))
             r, g, b = colorsys.hls_to_rgb(h/360, l/100, s/100)
             return mcolors.to_hex((r, g, b))
 
@@ -3168,15 +3222,9 @@ class Worker():
             4: 280   # Fib: purple
         }
         if self.class_num == 4:
-            # color_map = {
-            #     -1: 'grey',      # No Prediction
-            #     1: 'green',     # Pred Normal
-            #     2: 'red',       # Pred HCC
-            #     3: 'blue',      # Pred CC
-            # }
             color_map = {
-                -1: 'dimgrey',                   # No Prediction
-                1:  get_hsl(HUE[1], 80, 25), # Pred Normal
+                -1: 'dimgrey',                # No Prediction
+                1:  get_hsl(HUE[1], 80, 25),  # Pred Normal
                 2:  get_hsl(HUE[2], 100, 50), # Pred HCC
                 3:  get_hsl(HUE[3], 100, 55), # Pred CC
                 4:  get_hsl(HUE[4],  90, 50), # Pred Fib
@@ -3189,16 +3237,10 @@ class Worker():
                 plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
             ]
         elif self.class_num == 3:
-            # if self.test_type == "HCC":
             if self.wsi_type == "HCC":
-                # color_map = {
-                #     -1: 'grey',      # No Prediction
-                #     1: 'green',     # Pred Normal
-                #     2: 'red',       # Pred HCC
-                # }
                 color_map = {
-                    -1: 'dimgrey',                   # No Prediction
-                    1:  get_hsl(HUE[1], 80, 25), # Pred Normal
+                    -1: 'dimgrey',                # No Prediction
+                    1:  get_hsl(HUE[1], 80, 25),  # Pred Normal
                     2:  get_hsl(HUE[2], 100, 50), # Pred HCC
                     3:  get_hsl(HUE[4],  90, 50), # Pred Fib
                 }
@@ -3208,16 +3250,10 @@ class Worker():
                     plt.Line2D([0], [0], color=color_map[3], lw=4, label='Pred Fib'),
                     plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
-            # elif self.test_type == "CC":
             elif self.wsi_type == "CC":
-                # color_map = {
-                #     -1: 'grey',      # No Prediction
-                #     1: 'green',     # Pred Normal
-                #     2: 'blue',      # Pred CC
-                # }
                 color_map = {
-                    -1: 'dimgrey',                   # No Prediction
-                    1:  get_hsl(HUE[1], 80, 25), # Pred Normal
+                    -1: 'dimgrey',                # No Prediction
+                    1:  get_hsl(HUE[1], 80, 25),  # Pred Normal
                     2:  get_hsl(HUE[3], 100, 55), # Pred CC
                     3:  get_hsl(HUE[4],  90, 50), # Pred Fib
                 }
@@ -3227,6 +3263,30 @@ class Worker():
                     plt.Line2D([0], [0], color=color_map[3], lw=4, label='Pred Fib'),
                     plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
+        elif self.class_num == 2:
+            if self.wsi_type == 'HCC':
+                color_map = {
+                    -1: 'grey',     # No Prediction
+                    1: 'green',     # Pred Normal
+                    2: 'red',       # Pred HCC
+                }
+                legend_elements = [
+                    plt.Line2D([0], [0], color=color_map[1], lw=4, label='Pred Normal'),
+                    plt.Line2D([0], [0], color=color_map[2], lw=4, label='Pred HCC'),
+                    plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
+                ]
+            elif self.wsi_type == 'CC':
+                color_map = {
+                    -1: 'grey',     # No Prediction
+                    1: 'green',     # Pred Normal
+                    2: 'blue',      # Pred CC
+                }
+                legend_elements = [
+                    plt.Line2D([0], [0], color=color_map[1], lw=4, label='Pred Normal'),
+                    plt.Line2D([0], [0], color=color_map[2], lw=4, label='Pred CC'),
+                    plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
+                ]
+
         plt.figure(figsize=(x_max/10, y_max/10))
         for label_value, color in color_map.items():
             plt.imshow(image == label_value, cmap=ListedColormap([[0,0,0,0], color]), interpolation='nearest', alpha=1)
