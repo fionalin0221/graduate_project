@@ -8,6 +8,7 @@ import random
 import yaml
 import time
 from PIL import Image
+from collections import Counter
 from torch.utils.data import ConcatDataset, Dataset, DataLoader
 import torchvision
 import torchvision.transforms as transforms
@@ -177,8 +178,10 @@ class Worker():
             if self.state == "old":
                 if label_text == "H":
                     img_path = os.path.join(self.img_dir, "HCC", img_name)
-                if label_text == "N":
+                elif label_text == "N":
                     img_path = os.path.join(self.img_dir, "Normal", img_name)
+                elif label_text == "F":
+                    img_path = os.path.join(self.img_dir, "Fibrosis", img_name)
             elif self.state == "new":
                 img_path = os.path.join(self.img_dir, img_name)
             
@@ -208,8 +211,10 @@ class Worker():
             if self.state == "old":
                 if label_text == "H":
                     img_path = os.path.join(self.img_dir, "HCC", img_name)
-                if label_text == "N":
+                elif label_text == "N":
                     img_path = os.path.join(self.img_dir, "Normal", img_name)
+                elif label_text == "F":
+                    img_path = os.path.join(self.img_dir, "Fibrosis", img_name)
             elif self.state == "new":
                 img_path = os.path.join(self.img_dir, img_name)
             
@@ -243,9 +248,10 @@ class Worker():
             if self.state == 'old':
                 if label_text == 'H':
                     image_path = os.path.join(self.img_dir, 'HCC', img_name)
-                if label_text == 'N':
+                elif label_text == 'N':
                     image_path = os.path.join(self.img_dir, 'Normal', img_name)
-
+                elif label_text == 'F':
+                    image_path = os.path.join(self.img_dir, 'Fibrosis', img_name)
             if self.state == 'new':
                 image_path = os.path.join(self.img_dir, img_name)
 
@@ -1195,7 +1201,17 @@ class Worker():
         iter_valid_gt_loss_list = []
         iter_other_valid_loss_list = []
 
+        counts = ['epoch']
+        for cl in self.classes:
+            counts.append(f'{cl}_count')
+        counts.append('total_count')
+        for cl in self.classes:
+            counts.append(f'{cl}_percentage(%)')
+        
+        pd.DataFrame(columns=counts).to_csv(f"{loss_save_path}/{condition}_train_count_log.csv", index=False)
+
         for epoch in range(1, n_epochs+1):
+            epoch_counts = Counter()
             # ---------- Training ----------
             # Make sure the model is in train mode before training.
             model.train()
@@ -1210,6 +1226,7 @@ class Worker():
                 # A batch consists of image data and corresponding labels.
                 imgs, labels, _ = batch
                 imgs, labels = imgs.to(device), labels.to(device)
+                epoch_counts.update(labels.tolist())
 
                 if target_class == None:
                     if self.loss == 'binary_cross_entropy':
@@ -1271,6 +1288,19 @@ class Worker():
                 "train_loss": iter_train_loss_list
             })
             training_iteration_log.to_csv(f"{loss_save_path}/{condition}_train_iteration_log.csv", index=False)
+
+            total_samples = sum(epoch_counts.values())
+            count_data = {'epoch': epoch}
+            for i, cl in enumerate(self.classes):
+                c = epoch_counts.get(i, 0)
+                p = 100 * c / total_samples
+                count_data[f'{cl}_count'] = c
+                count_data[f'{cl}_percentage(%)'] = round(p, 2)
+            count_data['total_count'] = total_samples
+
+            count_df = pd.DataFrame([count_data])
+            count_df = count_df[counts]
+            count_df.to_csv(f"{loss_save_path}/{condition}_train_count_log.csv", mode='a', header=False, index=False)
 
             if epoch % self.model_save_freq == 0:
                 torch.save(model.state_dict(), f"{model_save_path}/{condition}_Model_epoch{epoch}.ckpt")
