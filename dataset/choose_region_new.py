@@ -218,7 +218,7 @@ for wsi in wsis:
     nums = [0] * len(classes)
 
     if cancer_type == "HCC":
-        patches_path = os.path.join(file_paths[f'{cancer_type}_{state}_patches_save_path'],f"{wsi}")
+        patches_path = os.path.join(file_paths[f'{cancer_type}_patches_save_path'],f"{wsi}")
     else:
         patches_path = os.path.join(file_paths[f'{cancer_type}_patches_save_path'],f"{wsi}")
     if not os.path.exists(patches_path):
