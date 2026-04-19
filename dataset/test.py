@@ -5,12 +5,15 @@ import cv2
 import shutil
 import re
 import glob
+import random
 import pandas as pd
 from tqdm import tqdm
+from collections import Counter
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
 from matplotlib.colors import ListedColormap
+import matplotlib.patches as patches
 from sklearn.metrics import accuracy_score, confusion_matrix
 
 # print(torch.cuda.is_available())
@@ -728,4 +731,58 @@ def images_to_gif():
     )
     print(f"Output GIF: {output_path}")
 
-images_to_gif()
+def visualize_patches_on_wsi(patch_size=448):
+    classes = ['N', 'C', 'F']
+    cancer_type = 'CC'
+    csv_dir = "/workspace/Data/Results/CC_NDPI/Data_Info/1"
+    csv_path = f'{csv_dir}/10001_patch_in_region_filter_3_v2.csv'
+    
+    df = pd.read_csv(csv_path)
+    
+    color_map = {classes[0]: 'green',}
+    color_map[classes[1]] = 'red' if cancer_type == "HCC" else 'blue'
+    if len(classes) > 2:
+        color_map[classes[2]] = 'yellow'
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+
+    for _, row in df.iterrows():
+        f = row['file_name']
+        label = row['label']
+
+        fx, fy = f.replace('.tif', '').split('_')
+        x, y = int(fx), int(fy)
+
+        rect = patches.Rectangle((x, y), patch_size, patch_size, 
+                                 linewidth=0, 
+                                 edgecolor='none', 
+                                 facecolor=color_map.get(label, 'grey'), 
+                                 alpha=0.6)
+        ax.add_patch(rect)
+
+    # Setting the range of the image
+    all_x = df['file_name'].apply(lambda x: int(os.path.splitext(x)[0].split('_')[0]))
+    all_y = df['file_name'].apply(lambda x: int(os.path.splitext(x)[0].split('_')[1]))
+    
+    padding = patch_size * 5
+    ax.set_xlim(all_x.min() - padding, all_x.max() + padding)
+    ax.set_ylim(all_y.min() - padding, all_y.max() + padding)
+
+    ax.set_aspect('equal')
+    ax.invert_yaxis() 
+    
+    plt.title(f"Patch Visualization - {len(df)} patches")
+    plt.legend([patches.Patch(color=color_map[c], alpha=0.5) for c in classes], classes)
+    
+    plt.savefig(f"{csv_dir}/visualization_WSI_1_new.png", dpi=300, bbox_inches='tight', facecolor='white')
+
+def sample_test():
+    active_classes = ['N', 'H']
+    sampling_weights = [0.5, 0.5]
+    target_classes = random.choices(active_classes, weights=sampling_weights, k=32)
+    counts = Counter(target_classes)
+    print(counts)
+
+# images_to_gif()
+visualize_patches_on_wsi()
+# sample_test()
