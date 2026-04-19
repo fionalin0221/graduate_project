@@ -10,17 +10,17 @@ base_model_trial = 7
 
 num_wsi = 1
 data_num = 'ALL'
-num_trial = 3
-gen = 5
+num_trial = 1
+gen = 3
 num_class = 3
-error_train = False
+test_type = 'self'
 
-base_dir = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
+# base_dir = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 # base_dir = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
-# base_dir = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
+base_dir = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 
 # Define trials and WSIs
-HCC_wsi_list = [195]
+# HCC_wsi_list = []
 CC_wsi_list = []
 
 # HCC 10WTC
@@ -59,7 +59,9 @@ CC_wsi_list = []
 
 # Generation Training
 # HCC_wsi_list = [104, 107, 109, 111, 120, 121, 122, 129, 131, 132, 135, 139, 141, 142, 145, 146, 149, 150, 153, 156, 159, 161, 162, 164, 165, 166, 168, 169, 171, 175]
-# HCC_wsi_list = [h+91 for h in HCC_wsi_list]
+# HCC_wsi_list = [176, 179, 180, 182, 183, 184, 186, 190, 196, 200, 202, 204, 206, 207, 210, 211, 212, 213]
+HCC_wsi_list = [214, 215, 216, 217, 218, 219, 222, 223, 224, 225, 226, 227, 228, 229, 230, 232, 233, 238, 246, 247, 248, 249, 250]
+HCC_wsi_list = [h+91 for h in HCC_wsi_list]
 # CC_wsi_list = [146, 158, 163, 164, 165, 315, 316, 331, 363, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 495, 497, 499]
 
 def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
@@ -71,11 +73,11 @@ def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
     df = pd.read_csv(file_path)
 
     # Extract required columns
-    if {'Accuracy', f'{cl}_TP', f'{cl}_FN'}.issubset(df.columns):
-        row = df.iloc[0][['Accuracy', f'{cl}_TP', f'{cl}_FN']]
-        results.append([num_trial, wsi, gen, condition, cl] + row.tolist())  # Add trial and WSI ID for reference
+    if {'Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN', f'{cl}_TN', f'{cl}_FP'}.issubset(df.columns):
+        row = df.iloc[0][['Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN', f'{cl}_TN', f'{cl}_FP']]
+        results.append([num_trial, wsi, cl] + row.tolist())  # Add trial and WSI ID for reference
     else:
-        print(f"Missing columns in {file_path}")
+        print(f"Missing columns in {file_path}, {cl}")
 
     return results
 
@@ -85,22 +87,22 @@ def collect_results(wsi, cl, results):
     else:
         base_path = f'{base_dir}/{num_wsi}WTC_LP_{data_num}/trial_{num_trial}'
 
-    if error_train:
-        for error_rate in np.arange(0.01, 0.5, 0.05):
+    if test_type == 'error':
+        for error_rate in [0.0, *np.arange(0.01, 1.0, 0.05), 1.0]:
             condition = f"ND_zscore_selected_patches_with_error_rate_{error_rate}"
             file_path = f"{base_path}/Metric/{condition}_test_result.csv"
             results = add_results(file_path, error_rate, cl, wsi, num_trial, "error_rate", results)
+    elif test_type == 'area':
+        for thresh in np.arange(0, 100, 5):
+            condition = f"{wsi}_Gen1_ND_zscore_selected_patches_by_Gen0_flip_{thresh}"
+            file_path = f"{base_path}/Metric/{condition}_test_result.csv"
+            results = add_results(file_path, thresh, cl, wsi, num_trial, "area", results)
     else:
-        if num_wsi == 1:
-            file_path = f"{base_path}/Metric/{num_class}_class_test_result.csv"
-        else:
-            file_path = f"{base_path}/Metric/{wsi}_{num_class}_class_test_result.csv"
+        file_path = f"{base_path}/Metric/{wsi}_{num_class}_class_test_result.csv"
         results = add_results(file_path, 0, cl, wsi, num_trial, "inference", results)
         
         for g in range(1, gen+1):
-            condition = f"Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}"
-            if num_wsi != 1:
-                condition = f"{wsi}_{condition}"
+            condition = f"{wsi}_Gen{g}_ND_zscore_selected_patches_by_Gen{g-1}"
             file_path = f"{base_path}/Metric/{condition}_flip_test_result.csv"
             results = add_results(file_path, g, cl, wsi, num_trial, "flip", results)
             file_path = f"{base_path}/Metric/{condition}_test_result.csv"
@@ -115,42 +117,55 @@ results = []
 for _wsi in HCC_wsi_list:
     wsi = _wsi
     results = collect_results(wsi, "H", results)
+    results = collect_results(wsi, "N", results)
+    results = collect_results(wsi, "F", results)
 
 for _wsi in CC_wsi_list:
     wsi = f"1{_wsi:04d}"
     results = collect_results(wsi, "C", results)
-
-for _wsi in HCC_wsi_list:
-    wsi = _wsi
     results = collect_results(wsi, "N", results)
-
-for _wsi in CC_wsi_list:
-    wsi = f"1{_wsi:04d}"
-    results = collect_results(wsi, "N", results)
+    results = collect_results(wsi, "F", results)
             
 # --- Convert to DataFrame ---
-df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Gen', 'Condition', 'Class', 'Accuracy', 'TP', 'FN'])
+df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Class', 'Accuracy', 'F1', 'TP', 'FN', 'TN', 'FP'])
 
 # --- Separate tumor (H/C) and normal (N) ---
 df_tumor = df[df['Class'].isin(['H', 'C'])].copy()
 df_normal = df[df['Class'] == 'N'].copy()
-
-# Rename N columns (TP→TN, FN→FP)
-df_normal = df_normal.rename(columns={'TP': 'TN', 'FN': 'FP'})
+df_fib = df[df['Class'] == 'F'].copy()
 
 # Merge on Trial, WSI, Gen, Condition
+df_tumor = df_tumor.rename(columns={'TP': 'T_TP', 'FN': 'T_FN', 'TN': 'T_TN', 'FP': 'T_FP'})
+
 merged = pd.merge(
     df_tumor,
-    df_normal[['Trial', 'WSI', 'Gen', 'Condition', 'TN', 'FP']],
-    on=['Trial', 'WSI', 'Gen', 'Condition'],
+    df_normal[['Trial', 'WSI', 'TP', 'FN', 'TN', 'FP']],
+    on=['Trial', 'WSI'],
     how='left'
 )
+merged = merged.rename(columns={'TP': 'N_TP', 'FN': 'N_FN', 'TN': 'N_TN', 'FP': 'N_FP'})
+
+merged = pd.merge(
+    merged,
+    df_fib[['Trial', 'WSI', 'TP', 'FN', 'TN', 'FP']],
+    on=['Trial', 'WSI'],
+    how='left'
+)
+merged = merged.rename(columns={'TP': 'F_TP', 'FN': 'F_FN', 'TN': 'F_TN', 'FP': 'F_FP'})
 
 # --- Final columns (remove Class) ---
-df_output = merged[['Trial', 'WSI', 'Gen', 'Condition', 'Accuracy', 'TP', 'FN', 'TN', 'FP']]
+df_output = merged[['Trial', 'WSI', 'Accuracy', 'F1', 'T_TP', 'T_FN', 'T_TN', 'T_FP', 'N_TP', 'N_FN', 'N_TN', 'N_FP', 'F_TP', 'F_FN', 'F_TN', 'F_FP']]
 
 if num_wsi == 1:
-    output_file = f'{base_dir}/LP_{data_num}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv'
+    if len(HCC_wsi_list) == 1:
+        wsi = HCC_wsi_list[0]
+        output_file = f'{base_dir}/LP_{data_num}/{wsi}/{wsi}_{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv'
+    elif len(CC_wsi_list) == 1:
+        wsi = CC_wsi_list[0]
+        output_file = f'{base_dir}/LP_{data_num}/{wsi}/{wsi}_{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv'
+    else:
+        output_file = f'{base_dir}/LP_{data_num}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results_new_2.csv'
+    
 else:
     output_file = f'{base_dir}/{num_wsi}WTC_LP_{data_num}/trial_{num_trial}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_generation_results.csv'
 

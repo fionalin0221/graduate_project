@@ -3,15 +3,15 @@ import pandas as pd
 
 # Define paths
 result_type = "HCC"
-num_wsi = 1
+num_wsi = 20
 data_num = "ALL"
-num_trial = 6
-num_class = 3
+num_trial = 9
+num_class = 2
 ep = 0
 
 # base_path = f"/workspace/Data/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-# base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
+# base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
+base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
 output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
 # if ep == 0:
 #     output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
@@ -23,14 +23,15 @@ output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_res
 CC_wsi_list = []
 
 # HCC 10WTC
-HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 44, 45]
+# HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 44, 45]
 # HCC_wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
 # HCC_wsi_list = [6, 11, 39, 52, 144]
+HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29 ,30 , 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
 
 # CC 10WTC
 # CC_wsi_list = [72, 108, 111, 116, 122, 124, 130, 131, 137, 138]
 # CC_wsi_list = [2, 21, 50, 69, 81]
-
+# CC_wsi_list = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71]
 
 # HCC 40WTC
 # HCC_wsi_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 37, 38, 39, 41, 42, 43, 44]
@@ -71,11 +72,11 @@ def add_results(file_path, cl, wsi, num_trial, results):
     # Read the CSV file
     df = pd.read_csv(file_path)
 
-    if {'Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN'}.issubset(df.columns):
-        row = df.iloc[0][['Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN']]
+    if {'Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN', f'{cl}_TN', f'{cl}_FP'}.issubset(df.columns):
+        row = df.iloc[0][['Accuracy', 'F1 Score', f'{cl}_TP', f'{cl}_FN', f'{cl}_TN', f'{cl}_FP']]
         results.append([num_trial, wsi, cl] + row.tolist())  # Add trial and WSI ID for reference
     else:
-        print(f"Missing columns in {file_path}")
+        print(f"Missing columns in {file_path}, {cl}")
 
     return results
 
@@ -111,7 +112,7 @@ for _wsi in CC_wsi_list:
     results = collect_results(wsi, "F", results)
             
 # --- Convert to DataFrame ---
-df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Class', 'Accuracy', 'F1', 'TP', 'FN'])
+df = pd.DataFrame(results, columns=['Trial', 'WSI', 'Class', 'Accuracy', 'F1', 'TP', 'FN', 'TN', 'FP'])
 
 # --- Separate tumor (H/C) and normal (N) ---
 df_tumor = df[df['Class'].isin(['H', 'C'])].copy()
@@ -119,26 +120,26 @@ df_normal = df[df['Class'] == 'N'].copy()
 df_fib = df[df['Class'] == 'F'].copy()
 
 # Merge on Trial, WSI, Gen, Condition
-df_tumor = df_tumor.rename(columns={'TP': 'T_TP', 'FN': 'T_FN'})
+df_tumor = df_tumor.rename(columns={'TP': 'T_TP', 'FN': 'T_FN', 'TN': 'T_TN', 'FP': 'T_FP'})
 
 merged = pd.merge(
     df_tumor,
-    df_normal[['Trial', 'WSI', 'TP', 'FN']],
+    df_normal[['Trial', 'WSI', 'TP', 'FN', 'TN', 'FP']],
     on=['Trial', 'WSI'],
     how='left'
 )
-merged = merged.rename(columns={'TP': 'N_TP', 'FN': 'N_FN'})
+merged = merged.rename(columns={'TP': 'N_TP', 'FN': 'N_FN', 'TN': 'N_TN', 'FP': 'N_FP'})
 
 merged = pd.merge(
     merged,
-    df_fib[['Trial', 'WSI', 'TP', 'FN']],
+    df_fib[['Trial', 'WSI', 'TP', 'FN', 'TN', 'FP']],
     on=['Trial', 'WSI'],
     how='left'
 )
-merged = merged.rename(columns={'TP': 'F_TP', 'FN': 'F_FN'})
+merged = merged.rename(columns={'TP': 'F_TP', 'FN': 'F_FN', 'TN': 'F_TN', 'FP': 'F_FP'})
 
 # --- Final columns (remove Class) ---
-df_output = merged[['Trial', 'WSI', 'Accuracy', 'F1', 'T_TP', 'T_FN', 'N_TP', 'N_FN', 'F_TP', 'F_FN']]
+df_output = merged[['Trial', 'WSI', 'Accuracy', 'F1', 'T_TP', 'T_FN', 'T_TN', 'T_FP', 'N_TP', 'N_FN', 'N_TN', 'N_FP', 'F_TP', 'F_FN', 'F_TN', 'F_FP']]
 df_output.to_csv(output_file, index=False)
 
 print(f"Processed results saved to {output_file}")
