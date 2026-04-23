@@ -1,15 +1,45 @@
 from .work import Worker
 import yaml
 import os
+import argparse
+import numpy as np
+
+def get_args():
+    parser = argparse.ArgumentParser(description="config file")
+    default_config = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config.yml')
+
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        default=default_config, 
+        help=f'config path (default: {default_config})'
+    )
+
+    parser.add_argument(
+        '--trial', 
+        type=int, 
+        default=None, 
+        help=f'trial (default: None)'
+    )
+    
+    return parser.parse_args()
 
 def main():
     # Parse the arguments and load configuration
-    config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config.yml')
+    # config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'config', 'config.yml')
+    args = get_args()
+    config_path = args.config
+    trial = args.trial
+    print(f"Config path: {config_path}")
+    
     with open(config_path, 'r') as file:
         config = yaml.safe_load(file)
     current_computer = config['current_computer']
     file_paths = config['computers'][current_computer]['file_paths']
-    test_type = file_paths[f'test_type']
+    # test_type = file_paths[f'test_type']
+    if trial is not None:
+        file_paths['num_trial'] = trial
+        print(f"Trial: {file_paths['num_trial']}")
 
     # wsis = file_paths[f'HCC_old_wsis']
     # wsis = file_paths[f'HCC_wsis']
