@@ -12,11 +12,12 @@ def main():
     test_type = file_paths[f'test_type']
 
     # wsis = file_paths[f'HCC_old_wsis']
-    wsis = file_paths[f'HCC_wsis']
-    # wsis = file_paths[f'CC_wsis']
+    # wsis = file_paths[f'HCC_wsis']
+    wsis = file_paths[f'CC_wsis']
+    # print(len(wsis))
 
     worker = Worker(config)
-    # worker.train()
+    worker.train()
     # worker.train_multi_model()
     # worker.train_generation(labeled = False,  replay = True)
 
@@ -27,8 +28,8 @@ def main():
         # worker.plot_TI_Result(wsi, 0)
 
         # Classification Test
-        # worker.test_TATI(wsi, 0, model_wsi= 'multi')
-        # worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
+        worker.test_TATI(wsi, 0, model_wsi= 'multi')
+        worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
 
         # Two Stage Test
         # worker.test_TATI_two_stage(wsi, 0, model_wsi= 'multi')
@@ -40,15 +41,15 @@ def main():
         # worker.test_TATI(wsi, 0)
 
         # Generation Training - 1WSI
-        worker.train_generation_one_WSI(wsi, labeled=False, replay=False)
-        worker.test_all(wsi, config['generation'])
-        for gen in range(config['generation']+1):
-            if gen != 0:
-                worker.test_flip(wsi, gen)
-                worker.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True)
-                worker.plot_all_result(wsi, gen, plot_type = 'pred', plot_heatmap = False, plot_boundary = True)
-            worker.test_TATI(wsi, gen)
-            worker.plot_TI_Result(wsi, gen)
+        # worker.train_generation_one_WSI(wsi, labeled=False, replay=False)
+        # worker.test_all(wsi, config['generation'])
+        # for gen in range(config['generation']+1):
+        #     if gen != 0:
+        #         worker.test_flip(wsi, gen)
+        #         worker.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True)
+        #         worker.plot_all_result(wsi, gen, plot_type = 'pred', plot_heatmap = False, plot_boundary = True)
+        #     worker.test_TATI(wsi, gen)
+        #     worker.plot_TI_Result(wsi, gen)
 
         # Generation Training - Multi WSI
         # worker.test_all(wsi, config['generation'], model_wsi='multi')

@@ -42,6 +42,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 class Worker():
     def __init__(self, config):
+        self.config = config
         self.current_computer = config['current_computer']
 
         self.wsi_type = config['type']
@@ -125,6 +126,8 @@ class Worker():
         self.hcc_csv_dir = self.file_paths['HCC_csv_dir']
         self.cc_csv_dir = self.file_paths['CC_csv_dir']
 
+        self._save_config()
+
         # transforms
         self.train_tfm = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -139,7 +142,18 @@ class Worker():
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
         ])
-    
+
+    def _save_config(self):
+        backup_dir = f"{self.save_path}/trial_{self.num_trial}"
+        os.makedirs(backup_dir, exist_ok=True)
+        backup_file_path = f"{backup_dir}/config.yml"
+        
+        output_config = {k: v for k, v in self.config.items() if k != 'computers'}
+        output_config['computers'] = self.config['computers'][self.current_computer]
+
+        with open(backup_file_path, 'w', encoding='utf-8') as f:
+            yaml.dump(output_config, f, allow_unicode=True, sort_keys=False, default_flow_style=None, width=1000)
+
     class TrainDataset(Dataset):
         def __init__(self, data_dict, img_dir, classes, transform, state, data_len, class_weights=None):
             self.data_dict = data_dict
