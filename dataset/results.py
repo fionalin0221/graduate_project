@@ -1,11 +1,12 @@
 import os
 import pandas as pd
+import numpy as np
 
 # Define paths
 result_type = "Mix"
-num_wsi = 20
+num_wsi = 3
 data_num = "ALL"
-num_trial = 6
+num_trial = 13
 num_class = 4
 ep = 0
 
@@ -19,20 +20,20 @@ output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_res
 #     output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_for_epoch_{ep}_tati_test_results.csv"
 
 # Define trials and WSIs
-# HCC_wsi_list = []
-# CC_wsi_list = []
+HCC_wsi_list = [36, 38, 39]
+CC_wsi_list = [3, 8, 13]
 
 # HCC 10WTC
 # HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 44, 45]
 # HCC_wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
 # HCC_wsi_list = [6, 11, 39, 52, 144]
 # HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
-HCC_wsi_list = [1, 6, 8, 13, 16, 31, 36, 38, 39, 44, 47, 48, 49, 50, 51, 53, 9, 19, 24, 25]
+# HCC_wsi_list = [1, 6, 8, 13, 16, 31, 36, 38, 39, 44, 47, 48, 49, 50, 51, 53, 9, 19, 24, 25]
 
 # CC 10WTC
 # CC_wsi_list = [72, 108, 111, 116, 122, 124, 130, 131, 137, 138]
 # CC_wsi_list = [2, 21, 50, 69, 81]
-CC_wsi_list = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71]
+# CC_wsi_list = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71]
 
 # HCC 40WTC
 # HCC_wsi_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 37, 38, 39, 41, 42, 43, 44]

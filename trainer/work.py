@@ -147,6 +147,10 @@ class Worker():
         backup_dir = f"{self.save_path}/trial_{self.num_trial}"
         os.makedirs(backup_dir, exist_ok=True)
         backup_file_path = f"{backup_dir}/config.yml"
+
+        if os.path.exists(backup_file_path):
+            print(f"Config backup already exists at: {backup_file_path}. Skipping save.")
+            return
         
         output_config = {k: v for k, v in self.config.items() if k != 'computers'}
         output_config['computers'] = self.config['computers'][self.current_computer]
