@@ -679,57 +679,59 @@ def images_to_gif():
     font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
     font = ImageFont.truetype(font_path, 100)
 
-    wsi = 260
+    wsis = [109, 121, 129, 135, 141, 142, 161, 162, 168, 169, 104, 111, 120, 122, 131, 150, 159, 164, 165, 171, 166]
+    wsis = [w+91 for w in wsis]
     num_trial = 1
-    base_path = "/home/ipmclab/project/Results/Mix_NDPI/Generation_Training/100WTC_LP_ALL_trial_7_based/LP_ALL"
-    source_folder = f"{base_path}/{wsi}/trial_{num_trial}/Metric"
-    output_path = f"{base_path}/{wsi}/{wsi}_trial_{num_trial}_generations.gif"
+    base_path = "/home/ipmclab/project/Results/Mix_NDPI/Generation_Training/100WTC_LP_ALL_trial_51_based/LP_ALL"
+    for wsi in wsis:
+        source_folder = f"{base_path}/{wsi}/trial_{num_trial}/Metric"
+        output_path = f"{base_path}/{wsi}/{wsi}_trial_{num_trial}_generations.gif"
 
-    images = []
-    # for thresh in np.arange(0, 100, 5):
-    max_gen = 3
-    img_path = f"{source_folder}/{wsi}_3_class_pred.png"
-    img = Image.open(img_path).convert("RGB")
-    
-    draw = ImageDraw.Draw(img)
-    text = f"Generation: 0 (inference)"
-    draw.text((50, 50), text, fill=(0, 0, 0), font=font)
-
-    images.append(img)
-
-    for gen in range(1, max_gen+1):
-        img_path = f"{source_folder}/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_flip.png"
-        if not os.path.exists(img_path):
-            continue
+        images = []
+        # for thresh in np.arange(0, 100, 5):
+        max_gen = 3
+        img_path = f"{source_folder}/{wsi}_4_class_pred.png"
         img = Image.open(img_path).convert("RGB")
-
         
         draw = ImageDraw.Draw(img)
-        text = f"Generation: {gen} (flip)"
+        text = f"Generation: 0 (inference)"
         draw.text((50, 50), text, fill=(0, 0, 0), font=font)
 
         images.append(img)
 
-        img_path = f"{source_folder}/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_pred.png"
-        if not os.path.exists(img_path):
-            continue
-        img = Image.open(img_path).convert("RGB")
-        
-        draw = ImageDraw.Draw(img)
-        text = f"Generation: {gen} (inference)"
-        draw.text((50, 50), text, fill=(0, 0, 0), font=font)
+        for gen in range(1, max_gen+1):
+            img_path = f"{source_folder}/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_flip.png"
+            if not os.path.exists(img_path):
+                continue
+            img = Image.open(img_path).convert("RGB")
 
-        images.append(img)
+            
+            draw = ImageDraw.Draw(img)
+            text = f"Generation: {gen} (flip)"
+            draw.text((50, 50), text, fill=(0, 0, 0), font=font)
 
-    images[0].save(
-        output_path,
-        save_all=True,
-        append_images=images,
-        duration=1000,
-        loop=1,
-        optimize=True
-    )
-    print(f"Output GIF: {output_path}")
+            images.append(img)
+
+            img_path = f"{source_folder}/{wsi}_Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}_pred.png"
+            if not os.path.exists(img_path):
+                continue
+            img = Image.open(img_path).convert("RGB")
+            
+            draw = ImageDraw.Draw(img)
+            text = f"Generation: {gen} (inference)"
+            draw.text((50, 50), text, fill=(0, 0, 0), font=font)
+
+            images.append(img)
+
+        images[0].save(
+            output_path,
+            save_all=True,
+            append_images=images,
+            duration=1000,
+            loop=1,
+            optimize=True
+        )
+        print(f"Output GIF: {output_path}")
 
 def visualize_patches_on_wsi(patch_size=448):
     classes = ['N', 'C', 'F']
@@ -783,6 +785,6 @@ def sample_test():
     counts = Counter(target_classes)
     print(counts)
 
-# images_to_gif()
-visualize_patches_on_wsi()
+images_to_gif()
+# visualize_patches_on_wsi()
 # sample_test()
