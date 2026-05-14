@@ -488,7 +488,7 @@ class Worker():
         train, val, gt_val, test = [], [], [], []
         valid_test_percentage = valid_percentage + test_percentage
         for num in range(self.class_num):
-            if len(datas[num]) > 0:
+            if len(datas[num]) > 1:
                 if valid_test_percentage == 0:
                     train_ = datas[num]
                     temp = []
@@ -506,6 +506,10 @@ class Worker():
                 train.append(train_)
                 val.append(val_)
                 test.append(test_)
+            elif len(datas[num]) == 1:
+                train.append(datas[num])
+                val.append([])
+                test.append([])
             else:
                 train.append([])
                 val.append([])
