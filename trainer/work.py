@@ -918,7 +918,6 @@ class Worker():
         other_valid_csv = f"{data_save_path}/{data_condition}_other_valid.csv"
         test_csv  = f"{data_save_path}/{data_condition}_test.csv"
 
-        print(data_save_path, save_path)
         if data_save_path != save_path:
             if os.path.exists(train_csv):
                 shutil.copy(train_csv, f"{save_path}/{data_condition}_train.csv")
@@ -2339,6 +2338,7 @@ class Worker():
         os.makedirs(f"{save_path}/TI", exist_ok=True)
         os.makedirs(f"{save_path}/Data", exist_ok=True)
         
+        print(f"{wsi} | {condition}")
         _condition = f"{_wsi}_{condition}"
         if self.load_dataset:
             data_save_path = f"{self.save_path}/trial_{self.data_trial}/{_wsi}"
@@ -2408,8 +2408,8 @@ class Worker():
                 model.load_state_dict(torch.load(model_path, weights_only=True))
                 model.to(device)
 
-                _condition = f'{_condition}_on_model_{model_wsi}'
-                self._test(test_dataset, data_info_df, model, save_path, _condition)
+                __condition = f'{_condition}_on_model_{model_wsi}'
+                self._test(test_dataset, data_info_df, model, save_path, __condition)
 
         elif self.test_model == "multi_epoch":
             for ep in range(self.file_paths['min_epoch'], self.file_paths['max_epoch'] + 1):
@@ -2433,8 +2433,8 @@ class Worker():
                 model.load_state_dict(torch.load(model_path, weights_only=True))
                 model.to(device)
 
-                _condition = f'{_condition}_for_epoch_{ep}_small'
-                self._test(test_dataset, data_info_df, model, save_path, _condition)
+                __condition = f'{_condition}_for_epoch_{ep}'
+                self._test(test_dataset, data_info_df, model, save_path, __condition)
 
         elif self.test_model == "multi_class":
             for c in self.classes:
@@ -2457,8 +2457,8 @@ class Worker():
                 model.load_state_dict(torch.load(model_path, weights_only=True))
                 model.to(device)
 
-                _condition = f'{_condition}_for_class_{c}'
-                self._test(test_dataset, data_info_df, model, save_path, _condition, model_type=c)
+                __condition = f'{_condition}_for_class_{c}'
+                self._test(test_dataset, data_info_df, model, save_path, __condition, model_type=c)
     
     def test(self):
         condition = f"{self.num_wsi}WTC_LP{self.data_num}_{self.class_num}_class_trial_{self.num_trial}"
@@ -3039,11 +3039,6 @@ class Worker():
             y = (int(y)) // self.patch_size
             
             gt_label = self.classes.index(df['true_label'][idx])
-            if self.test_state == "old":
-                shift_map = self.file_paths["old_HCC_shift_map"]
-                dx, dy = shift_map[gt_label]
-                x += dx
-                y += dy
             
             if df['pred_label'][idx] != 'unknown':
                 pred_label  = self.classes.index(df['pred_label'][idx])
@@ -3372,7 +3367,7 @@ class Worker():
                 plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
             ]
         elif self.class_num == 3:
-            if self.wsi_type == "HCC":
+            if self.wsi_type == "HCC" or self.test_type == "HCC":
                 color_map = {
                     -1: 'dimgrey',                # No Prediction
                     1:  get_hsl(HUE[1], 80, 25),  # Pred Normal
@@ -3399,7 +3394,7 @@ class Worker():
                     plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
         elif self.class_num == 2:
-            if self.wsi_type == 'HCC':
+            if self.wsi_type == 'HCC' or self.test_type == 'HCC':
                 color_map = {
                     -1: 'grey',     # No Prediction
                     1: 'green',     # Pred Normal
@@ -3410,7 +3405,7 @@ class Worker():
                     plt.Line2D([0], [0], color=color_map[2], lw=4, label='Pred HCC'),
                     plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
-            elif self.wsi_type == 'CC':
+            elif self.wsi_type == 'CC' or self.test_type == 'CC':
                 color_map = {
                     -1: 'grey',     # No Prediction
                     1: 'green',     # Pred Normal
