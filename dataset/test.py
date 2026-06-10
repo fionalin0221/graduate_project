@@ -804,15 +804,17 @@ def sample_test():
     print(counts)
 
 def calculate_metrics():
-    output_file = "/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/100WTC_LP_ALL_trial_51_hcc_test_results_without_fib.csv"
+    output_file = "/home/ipmclab-2/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/100WTC_LP_ALL_trial_51_cc_tati_test_results_without_fib.csv"
     all_wsi_rows = []
-    wsi_cl = 'H'
-    wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
+    wsi_cl = 'C'
+    # wsis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64, 66, 67, 68, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 97, 99, 104, 107, 118, 120, 121, 122, 127, 129, 130, 135, 136, 138, 140, 141, 142, 144]
+    # wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
+    wsis = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71, 72, 88, 91, 95, 100, 108, 109, 110, 111, 118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 177, 178, 179, 180, 183, 184, 185, 189, 190, 191, 192, 201, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
     # wsis = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455, 146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
 
     for wsi in wsis:
-        input_file = f"/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/{wsi}/Metric/{wsi}_100WTC_LPALL_4_class_trial_51_for_epoch_80_confusion_matrix.csv"
-        # input_file = f"/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/1{wsi:04d}/Metric/1{wsi:04d}_100WTC_LPALL_4_class_trial_51_for_epoch_80_confusion_matrix.csv"
+        # input_file = f"/home/ipmclab-2/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/{wsi}/Metric/{wsi}_100WTC_LPALL_4_class_trial_51_for_epoch_45_confusion_matrix.csv"
+        input_file = f"/home/ipmclab-2/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/1{wsi:04d}/Metric/1{wsi:04d}_100WTC_LPALL_4_class_trial_51_for_epoch_45_confusion_matrix.csv"
         if not os.path.exists(input_file):
             print(f"cannot find {input_file}")
             continue
