@@ -100,7 +100,10 @@ class Worker():
 
         if self.gen_type:
             self.save_dir = self.file_paths[f'{self.wsi_type}_generation_save_path']
-            self.save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}'
+            if self.num_wsi == 1:
+                self.save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}'
+            else:
+                self.save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}'
             os.makedirs(self.save_path, exist_ok=True)
         else:
             self.save_dir = self.file_paths[f'{self.wsi_type}_WTC_result_save_path']
@@ -2860,7 +2863,7 @@ class Worker():
         # Save to CSV
         pd.DataFrame(results_df).to_csv(f"{save_path}/Metric/{condition}_flip_labels_predictions.csv", index=False)
         self.compute_metrics(all_labels, all_preds_labels, pred_df, save_path, condition, compute_roc=False, classes=classes)
-        self.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True)
+        self.plot_all_result(wsi, gen, plot_type = 'flip', plot_boundary = True, model_wsi=model_wsi)
 
     def test_all(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one', test_state=None, test_type=None):
         ### Multi-WTC Evaluation ###
@@ -3252,7 +3255,7 @@ class Worker():
         if self.gen_type:
             if save_path == None:
                 if model_wsi == "one":
-                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{_wsi}/trial_{self.num_trial}'
+                    save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/LP_{self.data_num}/{__wsi}/trial_{self.num_trial}'
                 else:
                     save_path = f'{self.save_dir}/{self.base_model_num_wsi}WTC_LP_{self.base_model_data_num}_trial_{self.base_model_trial}_based/{self.num_wsi}WTC_LP_{self.data_num}/trial_{self.num_trial}'
             if gen == 0:
