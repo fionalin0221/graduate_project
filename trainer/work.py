@@ -2939,7 +2939,7 @@ class Worker():
         print(self.classes)
 
         self._test(test_dataset, data_info_df, model, save_path, _condition, labeled_data_info_df=labeled_data_info_df, labeled=False)
-        self.plot_all_result(wsi, gen, plot_type = 'pred', plot_boundary = True)
+        self.plot_all_result(wsi, gen, plot_type = 'pred', plot_boundary = True, test_state=test_state, test_type=test_type, model_wsi=model_wsi)
 
     def plot_confusion_matrix(self, cm, save_path, condition, all_classes, title='Confusion Matrix'):
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -3003,8 +3003,12 @@ class Worker():
         plt.close()
 
     def plot_TI_Result(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one'):
-        _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
-        __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
+        if test_state == None:
+            test_state = self.test_state
+        if test_type == None:
+            test_type = self.test_type
+        _wsi = wsi+91 if (test_state == "new" and test_type == "HCC") else wsi
+        __wsi = wsi if test_state == "old" else (wsi+91 if test_type == "HCC" else f"1{wsi:04d}")
         if self.gen_type:
             if save_path == None:
                 if model_wsi == "one":
@@ -3249,9 +3253,14 @@ class Worker():
         plt.close()
         print(f"WSI {wsi} already plot the pred_vs_gt image")
 
-    def plot_all_result(self, wsi, gen, save_path = None, mode = 'selected', plot_type = 'pred', model_wsi = 'one', plot_heatmap = False, plot_boundary = False):
-        _wsi = wsi+91 if (self.test_state == "new" and self.test_type == "HCC") else wsi
-        __wsi = wsi if self.test_state == "old" else (wsi+91 if self.test_type == "HCC" else f"1{wsi:04d}")
+    def plot_all_result(self, wsi, gen, save_path = None, mode = 'selected', plot_type = 'pred', model_wsi = 'one', plot_heatmap = False, plot_boundary = False, test_state=None, test_type=None):
+        if test_state == None:
+            test_state = self.test_state
+        if test_type == None:
+            test_type = self.test_type
+        _wsi = wsi+91 if (test_state == "new" and test_type == "HCC") else wsi
+        __wsi = wsi if test_state == "old" else (wsi+91 if test_type == "HCC" else f"1{wsi:04d}")
+        
         if self.gen_type:
             if save_path == None:
                 if model_wsi == "one":
