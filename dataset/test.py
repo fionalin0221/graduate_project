@@ -481,6 +481,24 @@ def rename():
                 os.rename(old_path, new_path)
                 print(f"Renamed: {old_path} → {new_path}")
 
+def rename():
+    base_dir = "/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51"  # change to your root directory
+    old_str = "_for_epoch_40_small_for_epoch_45_small_for_epoch_50_small_"
+    new_str = "_for_epoch_50_small_"
+
+    wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 10373, 10376, 10377, 10378, 10379, 10380, 10390, 10391, 10392, 10400, 10401, 10402, 10406, 10407, 10408, 10409, 10410, 10422, 10454, 10455]
+
+    for wsi in wsis:
+        for root, dirs, files in os.walk(f"{base_dir}/{wsi}"):
+            for filename in files:
+                if old_str in filename:
+                    old_path = os.path.join(root, filename)
+                    new_filename = filename.replace(old_str, new_str)
+                    new_path = os.path.join(root, new_filename)
+                    
+                    os.rename(old_path, new_path)
+                    print(f"Renamed: {old_path} → {new_path}")
+
 def delete():
     # Specify the directory containing images
     image_dir = "/workspace/Data/Datas/CC_Patch"
@@ -785,6 +803,96 @@ def sample_test():
     counts = Counter(target_classes)
     print(counts)
 
-images_to_gif()
-# visualize_patches_on_wsi()
-# sample_test()
+def calculate_metrics():
+    output_file = "/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/100WTC_LP_ALL_trial_51_hcc_test_results_without_fib.csv"
+    all_wsi_rows = []
+    wsi_cl = 'H'
+    wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
+    # wsis = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455, 146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
+
+    for wsi in wsis:
+        input_file = f"/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/{wsi}/Metric/{wsi}_100WTC_LPALL_4_class_trial_51_for_epoch_80_confusion_matrix.csv"
+        # input_file = f"/home/ipmclab/project/Results/Mix_NDPI/100WTC_Result/LP_ALL/trial_51/1{wsi:04d}/Metric/1{wsi:04d}_100WTC_LPALL_4_class_trial_51_for_epoch_80_confusion_matrix.csv"
+        if not os.path.exists(input_file):
+            print(f"cannot find {input_file}")
+            continue
+            
+        df = pd.read_csv(input_file, index_col=0)
+        df_filtered = df.drop(index='True_F', columns='Pred_F', errors='ignore')
+        
+        classes = [c.replace('True_', '') for c in df_filtered.index]
+        df_filtered.index = classes
+        df_filtered.columns = [c.replace('Pred_', '') for c in df_filtered.columns]
+
+        total_correct = 0
+        total_samples = df_filtered.values.sum()
+
+        class_metrics = {}
+
+        for cls in classes:
+            tp = df_filtered.loc[cls, cls]
+            fp = df_filtered[cls].sum() - tp
+            fn = df_filtered.loc[cls].sum() - tp
+            
+            total_correct += tp
+
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+            
+            class_metrics[cls] = {
+                'Precision': precision,
+                'Recall': recall,
+                'F1': f1
+            }
+        
+        accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        
+        target_classes = [wsi_cl, 'N']
+        
+        p_list = [class_metrics.get(cls, {}).get('Precision', 0.0) for cls in target_classes]
+        r_list = [class_metrics.get(cls, {}).get('Recall', 0.0) for cls in target_classes]
+        f_list = [class_metrics.get(cls, {}).get('F1', 0.0) for cls in target_classes]
+        
+        macro_p = sum(p_list) / 2
+        macro_r = sum(r_list) / 2
+        macro_f = sum(f_list) / 2
+
+        t_p = class_metrics.get(wsi_cl, {}).get('Precision', 0.0)
+        t_r = class_metrics.get(wsi_cl, {}).get('Recall', 0.0)
+        t_f = class_metrics.get(wsi_cl, {}).get('F1', 0.0)
+        
+        n_p = class_metrics.get('N', {}).get('Precision', 0.0)
+        n_r = class_metrics.get('N', {}).get('Recall', 0.0)
+        n_f = class_metrics.get('N', {}).get('F1', 0.0)
+
+        row_data = {
+            'Trial': 51,
+            'WSI': wsi,
+            'Accuracy': accuracy,
+            'T_Precision': t_p,
+            'N_Precision': n_p,
+            'Macro_Precision': macro_p,
+            'T_Recall': t_r,
+            'N_Recall': n_r,
+            'Macro_Recall': macro_r,
+            'T_F1': t_f,
+            'N_F1': n_f,
+            'Macro_F1': macro_f
+        }
+        all_wsi_rows.append(row_data)
+
+    output_columns = [
+        'Trial', 'WSI', 'Accuracy', 
+        'T_Precision', 'N_Precision', 'Macro_Precision', 
+        'T_Recall', 'N_Recall', 'Macro_Recall', 
+        'T_F1', 'N_F1', 'Macro_F1'
+    ]
+    
+    output_df = pd.DataFrame(all_wsi_rows, columns=output_columns)
+
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    output_df.to_csv(output_file, index=False)
+
+calculate_metrics()
