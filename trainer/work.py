@@ -1941,7 +1941,7 @@ class Worker():
                 train_dataset, valid_dataset, valid_gt_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, None, "train", wsi, mode, error_rate=error_rate)
                 _condition = f"{condition}_error_rate_{error_rate}"
             else:
-                self.flip_wsi(wsi, gen, save_path = save_path, mode = mode, labeled = labeled)        
+                self.flip_wsi(wsi, gen, save_path = save_path, mode = mode, labeled = labeled)
                 train_dataset, valid_dataset, valid_gt_dataset, _, _ = self.prepare_dataset(f"{save_path}/Data", condition, gen, "train", wsi, mode)
                 _condition = condition
             train_datasets.append(train_dataset)
@@ -3002,7 +3002,7 @@ class Worker():
         plt.savefig(f"{save_path}/Metric/{condition}_ROC_per_class.png")
         plt.close()
 
-    def plot_TI_Result(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one'):
+    def plot_TI_Result(self, wsi, gen, save_path = None, mode = 'selected', model_wsi = 'one', test_state=None, test_type=None):
         if test_state == None:
             test_state = self.test_state
         if test_type == None:
@@ -3392,7 +3392,7 @@ class Worker():
                     plt.Line2D([0], [0], color=color_map[3], lw=4, label='Pred Fib'),
                     plt.Line2D([0], [0], color=color_map[-1], lw=4, label='No Prediction'),
                 ]
-            elif self.wsi_type == "CC":
+            elif self.wsi_type == "CC" or self.test_type == "CC":
                 color_map = {
                     -1: 'dimgrey',                # No Prediction
                     1:  get_hsl(HUE[1], 80, 25),  # Pred Normal
