@@ -897,4 +897,121 @@ def calculate_metrics():
     
     output_df.to_csv(output_file, index=False)
 
-calculate_metrics()
+def copy_files():
+    base_dir = "/home/ipmclab/project/Results/Mix_NDPI/Generation_Training/100WTC_LP_ALL_trial_7_based/LP_ALL"
+    # wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194]
+    # wsis = [195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
+    wsis = [195]
+    for wsi in wsis:
+        source_dir = f"{base_dir}/{wsi}/trial_10"
+        dest_dir = f"{base_dir}/{wsi}/trial_21"
+        os.makedirs(dest_dir, exist_ok=True)
+        os.makedirs(f"{dest_dir}/Metric", exist_ok=True)
+        os.makedirs(f"{dest_dir}/TI", exist_ok=True)
+        os.makedirs(f"{dest_dir}/Data", exist_ok=True)
+
+        for filename in os.listdir(f"{source_dir}/Metric"):
+            if filename.startswith(f"{wsi}_3_class"):
+                src_file = os.path.join(f"{source_dir}/Metric", filename)
+                dst_file = os.path.join(f"{dest_dir}/Metric", filename)
+                shutil.copy2(src_file, dst_file)
+
+        for filename in os.listdir(f"{source_dir}/TI"):
+            if filename.startswith(f"{wsi}_3_class"):
+                src_file = os.path.join(f"{source_dir}/TI", filename)
+                dst_file = os.path.join(f"{dest_dir}/TI", filename)
+                shutil.copy2(src_file, dst_file)
+
+def combine_confusion_matrices():
+    # base_dir = "/home/ipmclab/project/Results/Mix_NDPI/Generation_Training/100WTC_LP_ALL_trial_7_based/LP_ALL"
+    
+    num_wsi = 40
+    num_trial = 1
+    num_class = 2
+    base_dir = f"/home/ipmclab/project/Results/CC_NDPI/{num_wsi}WTC_Result/LP_ALL"
+    epoch = 0
+
+
+    # wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
+    
+    
+    # wsis = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 178, 179, 180, 183, 184, 185, 189, 191, 192, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 263, 264, 265, 266, 269, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+    
+    # wsis = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71, 72, 88, 91, 95, 100, 108, 109, 110, 111, 118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 177, 178, 179, 180, 183, 184, 185, 189, 190, 191, 192, 201, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+    # wsis = [1, 6, 7, 8, 11, 12, 13, 14, 39, 40, 52, 53, 54, 55, 70, 72, 100, 108, 111, 118, 122, 124, 130, 131, 136, 137, 138, 143, 144, 169, 170, 171, 175, 178, 180, 183, 184, 191, 202]
+    # wsis = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455, 
+    wsis = [146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
+    # conditions = ['3_class']
+    # for gen in range(1, 4):
+    #     conditions.append(f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}")
+    conditions = [f'{num_wsi}WTC_LPALL_{num_class}_class']
+    
+    for condition in conditions:
+        csv_blocks = []
+        combined_cm = None
+        for wsi in wsis:
+            # if wsi == 195:
+            #     cm_path = f"{base_dir}/{wsi}/trial_10/Metric/{wsi}_{condition}_confusion_matrix.csv"
+            # else:
+            # cm_path = f"{base_dir}/{wsi}/trial_1/Metric/{wsi}_{condition}_confusion_matrix.csv"
+            if num_wsi == 1:
+                cm_path = f"{base_dir}/1{wsi:04d}/trial_{num_trial}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_for_epoch_{epoch}_confusion_matrix.csv"
+            else:
+                cm_path = f"{base_dir}/trial_{num_trial}/1{wsi:04d}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_confusion_matrix.csv"
+                # cm_path = f"{base_dir}/trial_{num_trial}/1{wsi:04d}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_for_epoch_{epoch}_confusion_matrix.csv"
+            # Results/CC_NDPI/1WTC_Result/LP_ALL/10001/trial_1/Metric/10001_1WTC_LPALL_2_class_trial_1_for_epoch_20_confusion_matrix.csv
+            if not os.path.exists(cm_path):
+                print(f"File not found: {cm_path}")
+                continue
+            
+            df_cm = pd.read_csv(cm_path, index_col=0)
+            df_cm_filtered = df_cm.drop(index='True_F', columns='Pred_F', errors='ignore')
+            
+            # 建立一個標題列 DataFrame，區隔不同的 WSI
+            title_df = pd.DataFrame([[f"--- 1{wsi:04d} Confusion Matrix ---"] + [""] * (df_cm_filtered.shape[1])], 
+                                    columns=[df_cm_filtered.index.name or 'Index'] + list(df_cm_filtered.columns))
+            
+            # 為了能順利與標題列拼接，先將 index 轉回一般的欄位
+            df_to_append = df_cm_filtered.reset_index()
+            
+            # 修改標題列的欄位名稱使其一致，以便 concatenate
+            title_df.columns = df_to_append.columns
+            
+            # 將「標題」與「混淆矩陣數據」拼接，後面再加一個空行
+            empty_row = pd.DataFrame([[""] * df_to_append.shape[1]], columns=df_to_append.columns)
+            
+            csv_blocks.append(title_df)
+            csv_blocks.append(df_to_append)
+            csv_blocks.append(empty_row)
+
+            if combined_cm is None:
+                combined_cm = df_cm_filtered
+            else:
+                combined_cm += df_cm_filtered
+
+        # if combined_cm is not None:
+        #     output_path = f"{base_dir}/{condition}_combined_confusion_matrix.csv"
+        #     combined_cm.to_csv(output_path)
+        #     print(f"Combined confusion matrix saved to {output_path}")
+        # else:
+        #     print("No confusion matrices were combined.")
+        if csv_blocks and combined_cm is not None:
+            total_title = pd.DataFrame([["--- TOTAL COMBINED MATRIX ---"] + [""] * (combined_cm.shape[1])], 
+                                       columns=[combined_cm.index.name or 'Index'] + list(combined_cm.columns))
+            total_data = combined_cm.reset_index()
+            total_title.columns = total_data.columns
+            
+            csv_blocks.append(total_title)
+            csv_blocks.append(total_data)
+            
+            # 將所有區塊整合成一個巨大的 DataFrame
+            final_df = pd.concat(csv_blocks, ignore_index=True)
+            
+            # 儲存為單一一個 CSV 檔案
+            output_path = f"{base_dir}/{condition}_trial_{num_trial}_tani_all_in_one_confusion_matrix_2.csv"
+            final_df.to_csv(output_path, index=False)
+
+
+# calculate_metrics()
+# copy_files()
+combine_confusion_matrices()
