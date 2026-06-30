@@ -47,9 +47,29 @@ def main():
     # print(len(wsis))
 
     worker = Worker(config)
-    worker.train()
+    # worker.train()
     # worker.train_multi_model()
     # worker.train_generation(labeled = False,  replay = True)
+
+    # worker.test_type = 'HCC'
+    # for wsi in file_paths[f'HCC_wsis']:
+    #     worker.test_TATI(wsi, 0, model_wsi= 'multi')
+    #     worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
+    # worker.test_type = 'CC'
+    # for wsi in file_paths[f'CC_wsis']:
+    #     worker.test_TATI(wsi, 0, model_wsi= 'multi')
+    #     worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
+
+    # worker.test_type = 'HCC'
+    # for wsi in file_paths['valid_HCC_wsis']:
+    #     worker.test_small_set(wsi, model_wsi= 'multi')
+    #     # worker.test_TATI(wsi, 0, model_wsi= 'multi')
+    #     # worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
+    # worker.test_type = 'CC'
+    # for wsi in file_paths['valid_CC_wsis']:
+    #     worker.test_small_set(wsi, model_wsi= 'multi')
+    #     # worker.test_TATI(wsi, 0, model_wsi= 'multi')
+    #     # worker.plot_TI_Result(wsi, 0, model_wsi= 'multi')
 
     for wsi in wsis:
         # One WSI Train / Test
@@ -69,6 +89,11 @@ def main():
         # Error Rate Train / Test
         # worker.train_on_error_rate(wsi, labeled=False, replay=False)
         # worker.test_TATI(wsi, 0)
+
+        # for a in [1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000]:
+        #     worker.area_thresh = a        
+        #     worker.flip_wsi(wsi, 1, labeled = False)
+        #     worker.test_flip(wsi, 1)
 
         # Generation Training - 1WSI
         # worker.train_generation_one_WSI(wsi, labeled=False, replay=False)

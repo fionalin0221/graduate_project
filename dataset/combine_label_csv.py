@@ -34,8 +34,10 @@ def process():
         df3_fibrosis = pd.read_csv(file3_new_name)
 
         df3_f_only = df3_fibrosis[df3_fibrosis['label'] == 'F']
+        # df3_filtered = df3_fibrosis[df3_fibrosis['label'].isin(['F', 'N'])]
 
         df_combined = pd.concat([df2, df3_f_only], ignore_index=True)
+        # df_combined = pd.concat([df2, df3_filtered], ignore_index=True)
         df_result = df_combined.drop_duplicates(subset='file_name', keep='last')
 
         df_result.to_csv(file3_path, index=False)
