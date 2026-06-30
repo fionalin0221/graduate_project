@@ -690,9 +690,10 @@ class Worker():
                     gt_data = None
                 
                 if replay:
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
+                    Train, Valid, _, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_old_data_dir}/{wsi}', self.classes, self.train_tfm, state = "old", data_len=data_num, class_weights=self.sampling_weights)
                     valid_dataset = []
+                    valid_gt_dataset = []
                     test_dataset = []
                 else:
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, data_num, f'{self.hcc_old_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
@@ -713,9 +714,10 @@ class Worker():
                     gt_data = None
 
                 if replay:
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
+                    Train, Valid, _, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
                     train_dataset = self.TrainDataset(Train, f'{self.hcc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num, class_weights=self.sampling_weights)
                     valid_dataset = []
+                    valid_gt_dataset = []
                     test_dataset = []
                 else:
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, data_num, f'{self.hcc_data_dir}/{wsi}', gt_data=gt_data, error_rate=error_rate)
@@ -736,9 +738,10 @@ class Worker():
                     gt_data = None
 
                 if replay:
-                    Train, Valid, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
+                    Train, Valid, _, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', valid_percentage=0.0, error_rate=error_rate)
                     train_dataset = self.TrainDataset(Train, f'{self.cc_data_dir}/{wsi}', self.classes, self.train_tfm, state = "new", data_len=data_num, class_weights=self.sampling_weights)
                     valid_dataset = []
+                    valid_gt_dataset = []
                     test_dataset = []
                 else:
                     Train, Valid, Valid_gt, Test = self.split_datas(selected_data, data_num, f'{self.cc_data_dir}/{wsi}', error_rate=error_rate)

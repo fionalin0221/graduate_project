@@ -76,7 +76,7 @@ for wsi in wsis:
 
         print(patches_save_path)
 
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=8) as executor:
             futures = []
             print(f"Using {executor._max_workers} threads.")
             for height in tqdm(range(0, p_h*patch_size, patch_size)):
