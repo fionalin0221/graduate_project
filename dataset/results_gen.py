@@ -10,18 +10,18 @@ base_model_trial = 51
 
 num_wsi = 1
 data_num = 'ALL'
-num_trial = 1
+num_trial = 5
 gen = 3
 num_class = 4
-test_type = 'self'
+test_type = 'self'  # 'error', 'area', or 'self'
 
 # base_dir = f"/workspace/Data/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 # base_dir = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 base_dir = f"/home/ipmclab/project/Results/{result_type}_NDPI/Generation_Training/{base_model_num_wsi}WTC_LP_{base_model_data_num}_trial_{base_model_trial}_based"
 
 # Define trials and WSIs
-# HCC_wsi_list = []
-CC_wsi_list = []
+HCC_wsi_list = []
+# CC_wsi_list = []
 
 # HCC 10WTC
 # HCC_wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
@@ -58,12 +58,10 @@ CC_wsi_list = []
 # CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
 
 # Generation Training
-# HCC_wsi_list = [104, 107, 109, 111, 120, 121, 122, 129, 131, 132, 135, 139, 141, 142, 145, 146, 149, 150, 153, 156, 159, 161, 162, 164, 165, 166, 168, 169, 171, 175]
-# HCC_wsi_list = [176, 179, 180, 182, 183, 184, 186, 190, 196, 200, 202, 204, 206, 207, 210, 211, 212, 213]
-# HCC_wsi_list = [214, 215, 216, 217, 218, 219, 222, 223, 224, 225, 226, 227, 228, 229, 230, 232, 233, 238, 246, 247, 248, 249, 250]
-HCC_wsi_list = [132, 146, 149, 153, 156, 139, 145, 175, 107]
-HCC_wsi_list = [h+91 for h in HCC_wsi_list]
-# CC_wsi_list = [146, 158, 163, 164, 165, 315, 316, 331, 363, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 495, 497, 499]
+# HCC_wsi_list = [14, 26, 42, 60, 62, 63, 68, 69, 77, 78, 79, 80, 87, 89, 90, 92, 95, 98, 99, 103, 104, 107, 109, 111, 120, 121, 122, 129, 131, 132, 135, 139, 141, 142, 145, 146, 149, 150, 153, 156, 159, 161, 162, 164, 165, 166, 168, 169, 171, 175]
+# HCC_wsi_list = [h+91 for h in HCC_wsi_list]
+# CC_wsi_list = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455, 
+CC_wsi_list = [146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
 
 def add_results(file_path, gen, cl, wsi, num_trial, condition, results):
     if not os.path.exists(file_path):
@@ -103,7 +101,7 @@ def collect_results(wsi, cl, results):
             file_path = f"{base_path}/Metric/{condition}_test_result.csv"
             results = add_results(file_path, error_rate, cl, wsi, num_trial, "error_rate", results)
     elif test_type == 'area':
-        for thresh in np.arange(0, 100, 5):
+        for thresh in [1, 5, 10, 50, 100, 200, 500, 1000, 2000]:
             condition = f"{wsi}_Gen1_ND_zscore_selected_patches_by_Gen0_flip_{thresh}"
             file_path = f"{base_path}/Metric/{condition}_test_result.csv"
             results = add_results(file_path, thresh, cl, wsi, num_trial, "area", results)

@@ -3,37 +3,39 @@ import pandas as pd
 import numpy as np
 
 # Define paths
-result_type = "Mix"
-num_wsi = 3
+result_type = "HCC"
+num_wsi = 1
 data_num = "ALL"
-num_trial = 13
-num_class = 4
+num_trial = 1
+num_class = 2
 ep = 0
 
 # base_path = f"/workspace/Data/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
 # base_path = f"/home/ipmclab-2/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
 base_path = f"/home/ipmclab/project/Results/{result_type}_NDPI/{num_wsi}WTC_Result/LP_{data_num}"
-output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
+output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results_new.csv"
 # if ep == 0:
 #     output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_test_results.csv"
 # else:
-#     output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_for_epoch_{ep}_tati_test_results.csv"
+#     output_file = f"{base_path}/{num_wsi}WTC_LP{data_num}_trial_{num_trial}_for_epoch_{ep}_cc_tani_test_results.csv"
 
 # Define trials and WSIs
-HCC_wsi_list = [36, 38, 39]
-CC_wsi_list = [3, 8, 13]
+# HCC_wsi_list = []
+CC_wsi_list = []
 
 # HCC 10WTC
 # HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 44, 45]
 # HCC_wsi_list = [1, 12, 22, 33, 45, 56, 67, 76, 89, 91]
 # HCC_wsi_list = [6, 11, 39, 52, 144]
 # HCC_wsi_list = [1, 6, 8, 13, 16, 27, 29, 30, 31, 36, 38, 39, 44, 45, 47, 48, 49, 50, 51, 53]
-# HCC_wsi_list = [1, 6, 8, 13, 16, 31, 36, 38, 39, 44, 47, 48, 49, 50, 51, 53, 9, 19, 24, 25]
+# HCC_wsi_list = [1, 6, 8, 13, 16, 31, 36, 38, 39, 44, ]
+# HCC_wsi_list = [47, 48, 49, 50, 51, 53, 9, 19, 24, 25]
 
 # CC 10WTC
 # CC_wsi_list = [72, 108, 111, 116, 122, 124, 130, 131, 137, 138]
 # CC_wsi_list = [2, 21, 50, 69, 81]
-# CC_wsi_list = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71]
+# CC_wsi_list = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, ]
+# CC_wsi_list = [15, 39, 52, 53, 54, 55, 67, 69, 70, 71]
 
 # HCC 40WTC
 # HCC_wsi_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 37, 38, 39, 41, 42, 43, 44]
@@ -61,9 +63,11 @@ CC_wsi_list = [3, 8, 13]
 # CC_wsi_list =  [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
 
 # Generation Training
+HCC_wsi_list = [14, 26, 42, 60, 62, 63, 68, 69, 77, 78, 79, 80, 87, 89, 90, 92, 95, 98, 99, 103]
 # HCC_wsi_list = [104, 107, 109, 111, 120, 121, 122, 129, 131, 132, 135, 139, 141, 142, 145, 146, 149, 150, 153, 156, 159, 161, 162, 164, 165, 166, 168, 169, 171, 175]
 HCC_wsi_list = [h+91 for h in HCC_wsi_list]
-# CC_wsi_list = [146, 158, 163, 164, 165, 315, 316, 331, 363, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 495, 497, 499]
+# CC_wsi_list = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455]
+# CC_wsi_list = [146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
 
 
 def add_results(file_path, cl, wsi, num_trial, results):

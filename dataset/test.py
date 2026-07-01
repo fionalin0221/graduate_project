@@ -931,16 +931,22 @@ def combine_confusion_matrices():
     base_dir = f"/home/ipmclab/project/Results/CC_NDPI/{num_wsi}WTC_Result/LP_ALL"
     epoch = 0
 
+    # wsis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 37, 38, 39, 41, 42, 43, 44]
+    # hcc_wsis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64, 66, 67, 68, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 97, 99, 104, 107, 118, 120, 121, 122, 127, 129, 130, 135, 136, 138, 140, 141, 142, 144]
+    hcc_wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
+    # hcc_wsis = []
 
-    # wsis = [105, 117, 133, 151, 153, 154, 159, 160, 168, 169, 170, 171, 178, 180, 181, 183, 186, 189, 190, 194, 195, 198, 200, 202, 211, 212, 213, 220, 222, 223, 226, 230, 232, 233, 236, 237, 240, 241, 244, 247, 250, 252, 253, 255, 256, 257, 259, 260, 262, 266]
-    
-    
-    # wsis = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 178, 179, 180, 183, 184, 185, 189, 191, 192, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 263, 264, 265, 266, 269, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
-    
-    # wsis = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71, 72, 88, 91, 95, 100, 108, 109, 110, 111, 118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 177, 178, 179, 180, 183, 184, 185, 189, 190, 191, 192, 201, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+    # 40WTC
     # wsis = [1, 6, 7, 8, 11, 12, 13, 14, 39, 40, 52, 53, 54, 55, 70, 72, 100, 108, 111, 118, 122, 124, 130, 131, 136, 137, 138, 143, 144, 169, 170, 171, 175, 178, 180, 183, 184, 191, 202]
-    # wsis = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455, 
-    wsis = [146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
+    
+    # 100WTC
+    cc_wsis = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 178, 179, 180, 183, 184, 185, 189, 191, 192, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 263, 265, 266, 269, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+    # wsis = [1, 2, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 52, 53, 54, 55, 67, 69, 70, 71, 72, 88, 91, 95, 100, 108, 109, 110, 111, 118, 122, 123, 124, 130, 131, 134, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 177, 178, 179, 180, 183, 184, 185, 189, 190, 191, 192, 201, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+    # cc_wsis = [373, 376, 377, 378, 379, 380, 390, 391, 392, 400, 401, 402, 406, 407, 408, 409, 410, 422, 454, 455, 146, 158, 163, 164, 165, 331, 459, 460, 461, 468, 469, 470, 471, 472, 473, 474, 475, 476, 483, 484, 487, 491, 492, 493, 497, 499, 500, 501, 510, 512]
+    
+    # cc_wsis = [f"1{w:04d}" for w in cc_wsis]
+    wsis = hcc_wsis + cc_wsis
+    
     # conditions = ['3_class']
     # for gen in range(1, 4):
     #     conditions.append(f"Gen{gen}_ND_zscore_selected_patches_by_Gen{gen-1}")
@@ -955,17 +961,21 @@ def combine_confusion_matrices():
             # else:
             # cm_path = f"{base_dir}/{wsi}/trial_1/Metric/{wsi}_{condition}_confusion_matrix.csv"
             if num_wsi == 1:
-                cm_path = f"{base_dir}/1{wsi:04d}/trial_{num_trial}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_for_epoch_{epoch}_confusion_matrix.csv"
+                # cm_path = f"{base_dir}/{wsi}/trial_{num_trial}/Metric/{wsi}_{condition}_trial_{num_trial}_confusion_matrix.csv" 
+                # cm_path = f"{base_dir}/{wsi}/trial_{num_trial}/Metric/{wsi}_{condition}_trial_{num_trial}_for_epoch_{epoch}_confusion_matrix.csv" 
+                cm_path = f"{base_dir}/{wsi}/trial_{num_trial}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_confusion_matrix.csv"
             else:
-                cm_path = f"{base_dir}/trial_{num_trial}/1{wsi:04d}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_confusion_matrix.csv"
+                cm_path = f"{base_dir}/trial_{num_trial}/{wsi}/Metric/{wsi}_{condition}_trial_{num_trial}_for_epoch_{epoch}_confusion_matrix.csv"
+                # cm_path = f"{base_dir}/trial_{num_trial}/1{wsi:04d}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_confusion_matrix.csv"
                 # cm_path = f"{base_dir}/trial_{num_trial}/1{wsi:04d}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_for_epoch_{epoch}_confusion_matrix.csv"
             # Results/CC_NDPI/1WTC_Result/LP_ALL/10001/trial_1/Metric/10001_1WTC_LPALL_2_class_trial_1_for_epoch_20_confusion_matrix.csv
+            # /home/ipmclab/project/Results/CC_NDPI/1WTC_Result/LP_3200/1/trial_1/Metric/10001_1WTC_LP3200_2_class_trial_1_confusion_matrix.csv
             if not os.path.exists(cm_path):
                 print(f"File not found: {cm_path}")
                 continue
             
-            df_cm = pd.read_csv(cm_path, index_col=0)
-            df_cm_filtered = df_cm.drop(index='True_F', columns='Pred_F', errors='ignore')
+            df_cm_filtered = pd.read_csv(cm_path, index_col=0)
+            # df_cm_filtered = df_cm.drop(index='True_F', columns='Pred_F', errors='ignore')
             
             # 建立一個標題列 DataFrame，區隔不同的 WSI
             title_df = pd.DataFrame([[f"--- 1{wsi:04d} Confusion Matrix ---"] + [""] * (df_cm_filtered.shape[1])], 
@@ -1008,10 +1018,47 @@ def combine_confusion_matrices():
             final_df = pd.concat(csv_blocks, ignore_index=True)
             
             # 儲存為單一一個 CSV 檔案
-            output_path = f"{base_dir}/{condition}_trial_{num_trial}_tani_all_in_one_confusion_matrix_2.csv"
+            output_path = f"{base_dir}/{condition}_trial_{num_trial}_all_in_one_confusion_matrix.csv"
             final_df.to_csv(output_path, index=False)
 
+def gen_confusion_matrix():
+    num_wsi = 1
+    num_trial = 1
+    num_class = 2
+    base_dir = f"/home/ipmclab/project/Results/CC_NDPI/{num_wsi}WTC_Result/LP_3200"
+    condition = f'{num_wsi}WTC_LP3200_{num_class}_class'
+    # wsis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64, 66, 67, 68, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 97, 99, 104, 107, 118, 120, 121, 122, 127, 129, 130, 135, 136, 138, 140, 141, 142, 144]
+    wsis = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 178, 179, 180, 183, 184, 185, 189, 191, 192, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 263, 264, 265, 266, 269, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+
+    for wsi in wsis:
+        lp_df = pd.read_csv(f"{base_dir}/{wsi}/trial_{num_trial}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_labels_predictions.csv" )
+        labels_order = ['unknown', 'N', 'C']
+
+        cm = confusion_matrix(lp_df['true_label'], lp_df['pred_label'], labels=labels_order)
+
+        cm_df = pd.DataFrame(
+            cm, 
+            index=[f'True_{l}' for l in labels_order], 
+            columns=[f'Pred_{l}' for l in labels_order]
+        )
+
+        output_filename = f"{base_dir}/{wsi}/trial_{num_trial}/Metric/1{wsi:04d}_{condition}_trial_{num_trial}_confusion_matrix.csv" 
+        cm_df.to_csv(output_filename)
+
+def rename_folder():
+    base_dir = "/home/ipmclab/project/Results/CC_NDPI/1WTC_Result/LP_3200"
+    wsis = [1, 3, 6, 7, 8, 11, 12, 13, 14, 15, 39, 40, 42, 43, 52, 53, 54, 55, 67, 70, 71, 72, 88, 91, 95, 100, 108, 109, 111, 118, 122, 124, 130, 131, 135, 136, 137, 138, 143, 144, 145, 167, 168, 169, 170, 171, 173, 174, 175, 178, 179, 180, 183, 184, 185, 189, 191, 192, 202, 204, 206, 207, 208, 215, 217, 222, 223, 224, 225, 226, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 263, 265, 266, 269, 275, 276, 277, 291, 296, 297, 298, 299, 300, 325, 328, 329, 330, 374, 375]
+    for wsi in wsis:
+        old_folder = f"{base_dir}/{wsi}"
+        new_folder = f"{base_dir}/1{wsi:04d}"
+        if os.path.exists(old_folder):
+            os.rename(old_folder, new_folder)
+            print(f"Renamed {old_folder} to {new_folder}")
+        else:
+            print(f"Folder {old_folder} does not exist.")
 
 # calculate_metrics()
 # copy_files()
-combine_confusion_matrices()
+# combine_confusion_matrices()
+# gen_confusion_matrix()
+rename_folder()
